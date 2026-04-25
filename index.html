@@ -314,6 +314,93 @@
       text-align: center;
       padding: 1.5rem;
     }
+
+    /* ── Mobile ── */
+    #chat-backdrop { display: none; }
+    #chat-toggle   { display: none; }
+    #chat-close    { display: none; }
+
+    @media (max-width: 768px) {
+      #game-area {
+        flex-direction: column;
+        gap: 1.25rem;
+        padding: 1rem;
+        justify-content: flex-start;
+        padding-top: 1.5rem;
+        overflow-y: auto;
+      }
+
+      #snake-canvas {
+        width: 300px;
+        height: 300px;
+        image-rendering: pixelated;
+      }
+
+      #lb-wrap {
+        width: 100%;
+        max-width: 300px;
+      }
+
+      #controls-hint { display: none; }
+
+      #chat-panel {
+        position: fixed;
+        top: 0; right: 0; bottom: 0;
+        width: min(320px, 100vw);
+        transform: translateX(100%);
+        transition: transform 0.22s ease;
+        z-index: 50;
+        border-left: none;
+        box-shadow: -6px 0 24px rgba(0,0,0,0.6);
+      }
+
+      #chat-panel.open { transform: translateX(0); }
+
+      #chat-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.55);
+        z-index: 49;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.22s ease;
+      }
+
+      #chat-backdrop.visible { opacity: 1; pointer-events: auto; }
+
+      #chat-toggle {
+        display: flex;
+        align-items: center;
+        position: fixed;
+        bottom: 1.25rem;
+        right: 1.25rem;
+        z-index: 48;
+        background: #1a1a1a;
+        border: 1px solid #2a2a2a;
+        border-radius: 8px;
+        color: #888;
+        padding: 0.55rem 0.9rem;
+        font-size: 0.78rem;
+        font-family: inherit;
+        cursor: pointer;
+      }
+
+      #chat-close {
+        display: flex;
+        align-items: center;
+        background: none;
+        border: none;
+        color: #444;
+        font-size: 1.1rem;
+        cursor: pointer;
+        padding: 0;
+        margin-left: 0.5rem;
+        line-height: 1;
+      }
+
+      #chat-close:hover { color: #888; }
+    }
   </style>
 </head>
 <body>
@@ -331,11 +418,15 @@
     </div>
   </div>
 
+  <div id="chat-backdrop"></div>
+  <button id="chat-toggle">chat</button>
+
   <!-- ── Chat ── -->
   <div id="chat-panel">
     <div id="chat-header">
       <h1>chat</h1>
       <div id="online">live</div>
+      <button id="chat-close">×</button>
     </div>
 
     <div id="messages">
@@ -480,6 +571,26 @@
       }
     }
 
+    // Touch swipe controls for snake
+    let touchX = 0, touchY = 0;
+    canvas.addEventListener('touchstart', e => {
+      touchX = e.touches[0].clientX;
+      touchY = e.touches[0].clientY;
+      e.preventDefault();
+    }, { passive: false });
+    canvas.addEventListener('touchend', e => {
+      const dx = e.changedTouches[0].clientX - touchX;
+      const dy = e.changedTouches[0].clientY - touchY;
+      if (!alive) { initGame(); return; }
+      if (Math.abs(dx) > Math.abs(dy)) {
+        if (dx >  20 && dir.x !== -1) nextDir = {x: 1, y: 0};
+        if (dx < -20 && dir.x !==  1) nextDir = {x:-1, y: 0};
+      } else {
+        if (dy >  20 && dir.y !== -1) nextDir = {x: 0, y: 1};
+        if (dy < -20 && dir.y !==  1) nextDir = {x: 0, y:-1};
+      }
+    }, { passive: true });
+
     document.addEventListener('keydown', e => {
       // Don't hijack keys while typing in the chat input
       if (document.activeElement === input) return;
@@ -520,6 +631,19 @@
         lbRowsEl.appendChild(div);
       });
     }
+
+    // ── Chat toggle (mobile) ────────────────────────────────
+    const chatPanel    = document.getElementById('chat-panel');
+    const chatBackdrop = document.getElementById('chat-backdrop');
+    const chatToggle   = document.getElementById('chat-toggle');
+    const chatClose    = document.getElementById('chat-close');
+
+    function openChat()  { chatPanel.classList.add('open');    chatBackdrop.classList.add('visible'); }
+    function closeChat() { chatPanel.classList.remove('open'); chatBackdrop.classList.remove('visible'); }
+
+    chatToggle.addEventListener('click', openChat);
+    chatBackdrop.addEventListener('click', closeChat);
+    chatClose.addEventListener('click', closeChat);
 
     // ── Chat ────────────────────────────────────────────────
     const messagesEl     = document.getElementById('messages');
