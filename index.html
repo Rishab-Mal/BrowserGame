@@ -3,178 +3,304 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Snake</title>
+  <title>Anon Chat</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+
     body {
-      background: #0f0f0f;
+      background: #0d0d0d;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      height: 100vh;
-      font-family: 'Courier New', monospace;
+    }
+
+    header {
+      width: 100%;
+      max-width: 680px;
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid #1f1f1f;
+      display: flex;
+      align-items: baseline;
+      gap: 0.75rem;
+    }
+
+    header h1 {
+      font-size: 1rem;
+      font-weight: 600;
       color: #fff;
-      user-select: none;
+      letter-spacing: 0.02em;
     }
-    h1 { font-size: 2rem; letter-spacing: 0.3em; color: #4ade80; margin-bottom: 0.5rem; }
-    #score { font-size: 1rem; color: #888; margin-bottom: 1rem; letter-spacing: 0.1em; }
-    canvas {
-      border: 2px solid #333;
-      border-radius: 4px;
-      display: block;
+
+    header span {
+      font-size: 0.75rem;
+      color: #444;
     }
-    #msg {
-      margin-top: 1rem;
+
+    #online {
+      margin-left: auto;
+      font-size: 0.75rem;
+      color: #444;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    #online::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #4ade80;
+    }
+
+    #messages {
+      flex: 1;
+      width: 100%;
+      max-width: 680px;
+      overflow-y: auto;
+      padding: 1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+      scroll-behavior: smooth;
+    }
+
+    #messages::-webkit-scrollbar { width: 4px; }
+    #messages::-webkit-scrollbar-track { background: transparent; }
+    #messages::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+
+    .msg {
+      display: flex;
+      gap: 0.75rem;
+      padding: 0.35rem 0;
+      align-items: baseline;
+      animation: fadein 0.15s ease;
+    }
+
+    @keyframes fadein {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .msg .time {
+      font-size: 0.7rem;
+      color: #333;
+      white-space: nowrap;
+      flex-shrink: 0;
+      width: 3.5rem;
+      text-align: right;
+    }
+
+    .msg .text {
+      font-size: 0.9rem;
+      color: #d0d0d0;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .msg.mine .text { color: #fff; }
+
+    #bottom-bar {
+      width: 100%;
+      max-width: 680px;
+      padding: 0.75rem 1.25rem 1rem;
+      border-top: 1px solid #1f1f1f;
+    }
+
+    #form {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    #input {
+      flex: 1;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 0.65rem 0.9rem;
+      color: #e0e0e0;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    #input:focus { border-color: #444; }
+    #input::placeholder { color: #333; }
+
+    #send {
+      background: #1f1f1f;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      color: #aaa;
+      padding: 0 1rem;
       font-size: 0.85rem;
-      color: #555;
-      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+
+    #send:hover { background: #2a2a2a; color: #fff; }
+
+    #hint {
+      font-size: 0.7rem;
+      color: #2a2a2a;
+      text-align: center;
+      margin-top: 0.5rem;
+    }
+
+    .divider {
+      font-size: 0.7rem;
+      color: #222;
+      text-align: center;
+      margin: 0.5rem 0;
+    }
+
+    #status {
+      font-size: 0.8rem;
+      color: #444;
+      text-align: center;
+      padding: 2rem;
     }
   </style>
 </head>
 <body>
-  <h1>SNAKE</h1>
-  <div id="score">SCORE: 0</div>
-  <canvas id="c" width="400" height="400"></canvas>
-  <div id="msg">Press any arrow key or WASD to start</div>
+  <header>
+    <h1>anon chat</h1>
+    <span>say anything</span>
+    <div id="online">live</div>
+  </header>
 
-  <script>
-    const canvas = document.getElementById('c');
-    const ctx = canvas.getContext('2d');
-    const scoreEl = document.getElementById('score');
-    const msgEl = document.getElementById('msg');
+  <div id="messages">
+    <div id="status">connecting...</div>
+  </div>
 
-    const GRID = 20;
-    const COLS = canvas.width / GRID;
-    const ROWS = canvas.height / GRID;
+  <div id="bottom-bar">
+    <form id="form">
+      <input id="input" type="text" placeholder="type something..." maxlength="500" autocomplete="off" />
+      <button id="send" type="submit">send</button>
+    </form>
+    <div id="hint">fully anonymous · no accounts · no logs</div>
+  </div>
 
-    let snake, dir, nextDir, food, score, running, loop;
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
-    function init() {
-      snake = [{ x: 10, y: 10 }];
-      dir = { x: 0, y: 0 };
-      nextDir = { x: 0, y: 0 };
-      score = 0;
-      running = false;
-      scoreEl.textContent = 'SCORE: 0';
-      msgEl.textContent = 'Press any arrow key or WASD to start';
-      placeFood();
-      draw();
+    const SUPABASE_URL = 'https://fnwijpyzupydilyezwmn.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_JnINm8V2SsPlmLky6YMWKA_1KuDunPu';
+
+    const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const messagesEl = document.getElementById('messages');
+    const statusEl   = document.getElementById('status');
+    const form       = document.getElementById('form');
+    const input      = document.getElementById('input');
+
+    // Stable session ID to highlight own messages (not sent to server)
+    const SESSION_ID = sessionStorage.getItem('sid') || (() => {
+      const id = Math.random().toString(36).slice(2);
+      sessionStorage.setItem('sid', id);
+      return id;
+    })();
+
+    // Track message IDs we sent this session
+    const mine = new Set();
+
+    function fmt(ts) {
+      const d = new Date(ts);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
-    function placeFood() {
-      let pos;
-      do {
-        pos = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
-      } while (snake.some(s => s.x === pos.x && s.y === pos.y));
-      food = pos;
+    function renderMsg(msg, isOwn = false) {
+      const el = document.createElement('div');
+      el.className = 'msg' + (isOwn ? ' mine' : '');
+      el.dataset.id = msg.id;
+      el.innerHTML = `<span class="time">${fmt(msg.created_at)}</span><span class="text">${escHtml(msg.content)}</span>`;
+      return el;
     }
 
-    function tick() {
-      dir = nextDir;
-      const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
 
-      // Wall collision
-      if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) return gameOver();
-      // Self collision
-      if (snake.some(s => s.x === head.x && s.y === head.y)) return gameOver();
+    function scrollBottom() {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
 
-      snake.unshift(head);
+    function atBottom() {
+      return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 80;
+    }
 
-      if (head.x === food.x && head.y === food.y) {
-        score++;
-        scoreEl.textContent = `SCORE: ${score}`;
-        placeFood();
+    // Load recent messages
+    async function loadMessages() {
+      const { data, error } = await db
+        .from('messages')
+        .select('*')
+        .order('created_at', { ascending: true })
+        .limit(100);
+
+      statusEl.remove();
+
+      if (error) {
+        const err = document.createElement('div');
+        err.className = 'divider';
+        err.textContent = 'could not load messages';
+        messagesEl.appendChild(err);
+        return;
+      }
+
+      if (!data.length) {
+        const empty = document.createElement('div');
+        empty.className = 'divider';
+        empty.textContent = 'no messages yet — be the first';
+        messagesEl.appendChild(empty);
       } else {
-        snake.pop();
+        data.forEach(m => messagesEl.appendChild(renderMsg(m)));
       }
 
-      draw();
+      scrollBottom();
     }
 
-    function draw() {
-      ctx.fillStyle = '#0f0f0f';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Draw subtle grid
-      ctx.strokeStyle = '#1a1a1a';
-      ctx.lineWidth = 0.5;
-      for (let x = 0; x <= COLS; x++) {
-        ctx.beginPath(); ctx.moveTo(x * GRID, 0); ctx.lineTo(x * GRID, canvas.height); ctx.stroke();
-      }
-      for (let y = 0; y <= ROWS; y++) {
-        ctx.beginPath(); ctx.moveTo(0, y * GRID); ctx.lineTo(canvas.width, y * GRID); ctx.stroke();
-      }
-
-      // Food
-      ctx.fillStyle = '#f87171';
-      ctx.beginPath();
-      ctx.arc(food.x * GRID + GRID / 2, food.y * GRID + GRID / 2, GRID / 2 - 2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Snake
-      snake.forEach((seg, i) => {
-        const t = i / snake.length;
-        ctx.fillStyle = i === 0 ? '#4ade80' : `hsl(${140 - t * 40}, 70%, ${55 - t * 15}%)`;
-        ctx.beginPath();
-        ctx.roundRect(seg.x * GRID + 1, seg.y * GRID + 1, GRID - 2, GRID - 2, 3);
-        ctx.fill();
-      });
-
-      if (!running) {
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
+    // Real-time subscription
+    function subscribe() {
+      db.channel('messages')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+          const msg = payload.new;
+          // Skip if we already rendered it optimistically
+          if (document.querySelector(`[data-id="${msg.id}"]`)) return;
+          const wasAtBottom = atBottom();
+          messagesEl.appendChild(renderMsg(msg, mine.has(msg.id)));
+          if (wasAtBottom) scrollBottom();
+        })
+        .subscribe();
     }
 
-    function gameOver() {
-      clearInterval(loop);
-      running = false;
-      msgEl.textContent = `Game over! Score: ${score} — press any key to restart`;
-      draw();
-    }
-
-    function start() {
-      if (running) return;
-      init();
-      running = true;
-      msgEl.textContent = '';
-      loop = setInterval(tick, 120);
-    }
-
-    const DIRS = {
-      ArrowUp: { x: 0, y: -1 }, w: { x: 0, y: -1 },
-      ArrowDown: { x: 0, y: 1 }, s: { x: 0, y: 1 },
-      ArrowLeft: { x: -1, y: 0 }, a: { x: -1, y: 0 },
-      ArrowRight: { x: 1, y: 0 }, d: { x: 1, y: 0 },
-    };
-
-    document.addEventListener('keydown', e => {
-      const d = DIRS[e.key];
-      if (!d) return;
+    // Send message
+    form.addEventListener('submit', async e => {
       e.preventDefault();
-      if (!running) { start(); nextDir = d; return; }
-      // Prevent reversing
-      if (d.x === -dir.x && d.y === -dir.y) return;
-      nextDir = d;
+      const content = input.value.trim();
+      if (!content) return;
+      input.value = '';
+
+      const { data, error } = await db
+        .from('messages')
+        .insert({ content })
+        .select()
+        .single();
+
+      if (!error && data) {
+        mine.add(data.id);
+        // Update the element if realtime already rendered it
+        const existing = document.querySelector(`[data-id="${data.id}"]`);
+        if (existing) existing.classList.add('mine');
+      }
     });
 
-    // Touch support
-    let touchStart = null;
-    canvas.addEventListener('touchstart', e => { touchStart = e.touches[0]; }, { passive: true });
-    canvas.addEventListener('touchend', e => {
-      if (!touchStart) return;
-      const dx = e.changedTouches[0].clientX - touchStart.clientX;
-      const dy = e.changedTouches[0].clientY - touchStart.clientY;
-      let d;
-      if (Math.abs(dx) > Math.abs(dy)) d = dx > 0 ? DIRS.ArrowRight : DIRS.ArrowLeft;
-      else d = dy > 0 ? DIRS.ArrowDown : DIRS.ArrowUp;
-      if (!running) { start(); nextDir = d; return; }
-      if (d.x === -dir.x && d.y === -dir.y) return;
-      nextDir = d;
-    }, { passive: true });
-
-    init();
+    await loadMessages();
+    subscribe();
   </script>
 </body>
 </html>
