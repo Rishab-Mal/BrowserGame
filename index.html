@@ -40,9 +40,43 @@
       letter-spacing: 0.05em;
     }
 
+    #score { display: inline-block; }
+
+    #canvas-wrap {
+      position: relative;
+      line-height: 0;
+    }
+
     #snake-canvas {
       display: block;
       border: 1px solid #1a1a1a;
+    }
+
+    #go-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      opacity: 0;
+      pointer-events: none;
+      cursor: pointer;
+    }
+
+    #go-score {
+      font-size: 0.9rem;
+      color: #555;
+      letter-spacing: 0.1em;
+      font-family: inherit;
+      min-height: 1.2em;
+    }
+
+    #go-hint {
+      font-size: 0.65rem;
+      color: #2a2a2a;
+      font-family: inherit;
     }
 
     #controls-hint {
@@ -91,6 +125,17 @@
       font-size: 0.7rem;
       color: #444;
       flex-shrink: 0;
+    }
+
+    /* ── Eat flash particle ── */
+    .eat-flash {
+      position: fixed;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      background: #4ade80;
+      pointer-events: none;
+      z-index: 100;
     }
 
     /* ── Chat panel ── */
@@ -319,6 +364,7 @@
     #chat-backdrop { display: none; }
     #chat-toggle   { display: none; }
     #chat-close    { display: none; }
+    #chat-badge    { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #4ade80; vertical-align: middle; margin-left: 0.4rem; transform: scale(0); opacity: 0; }
 
     @media (max-width: 768px) {
       #game-area {
@@ -409,7 +455,13 @@
   <div id="game-area">
     <div id="snake-wrap">
       <div id="score-display">score: <span id="score">0</span></div>
-      <canvas id="snake-canvas"></canvas>
+      <div id="canvas-wrap">
+        <canvas id="snake-canvas"></canvas>
+        <div id="go-overlay">
+          <span id="go-score"></span>
+          <span id="go-hint">tap · space to restart</span>
+        </div>
+      </div>
       <div id="controls-hint">wasd · arrows · space to restart</div>
     </div>
     <div id="lb-wrap">
@@ -419,7 +471,7 @@
   </div>
 
   <div id="chat-backdrop"></div>
-  <button id="chat-toggle">chat</button>
+  <button id="chat-toggle">chat <span id="chat-badge"></span></button>
 
   <!-- ── Chat ── -->
   <div id="chat-panel">
@@ -451,6 +503,9 @@
 
   <script type="module">
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+    import gsap from './gsap-public/esm/index.js';
+    import { ScrambleTextPlugin } from './gsap-public/esm/ScrambleTextPlugin.js';
+    gsap.registerPlugin(ScrambleTextPlugin);
 
     const SUPABASE_URL = 'https://fnwijpyzupydilyezwmn.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_JnINm8V2SsPlmLky6YMWKA_1KuDunPu';
@@ -482,11 +537,14 @@
 
     // ── Snake ───────────────────────────────────────────────
     const GRID = 20, CELL = 20;
-    const canvas  = document.getElementById('snake-canvas');
-    const ctx     = canvas.getContext('2d');
-    const scoreEl = document.getElementById('score');
-    canvas.width  = GRID * CELL;
-    canvas.height = GRID * CELL;
+    const canvas    = document.getElementById('snake-canvas');
+    const ctx       = canvas.getContext('2d');
+    const scoreEl   = document.getElementById('score');
+    const goOverlay = document.getElementById('go-overlay');
+    const goScore   = document.getElementById('go-score');
+    const goHint    = document.getElementById('go-hint');
+    canvas.width    = GRID * CELL;
+    canvas.height   = GRID * CELL;
 
     let snake, dir, nextDir, food, score, alive, raf, lastTick;
 
@@ -499,6 +557,7 @@
       alive    = true;
       lastTick = 0;
       scoreEl.textContent = '0';
+      gsap.set(goOverlay, { opacity: 0, pointerEvents: 'none' });
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(gameFrame);
     }
@@ -519,6 +578,33 @@
       tick();
     }
 
+    function eatFlash() {
+      const rect   = canvas.getBoundingClientRect();
+      const scaleX = rect.width  / canvas.width;
+      const scaleY = rect.height / canvas.height;
+      const cx = rect.left + (food.x + 0.5) * CELL * scaleX;
+      const cy = rect.top  + (food.y + 0.5) * CELL * scaleY;
+
+      for (let i = 0; i < 6; i++) {
+        const el = document.createElement('div');
+        el.className = 'eat-flash';
+        document.body.appendChild(el);
+        const angle = (i / 6) * Math.PI * 2;
+        const dist  = 18 + Math.random() * 14;
+        gsap.fromTo(el,
+          { x: cx - 5, y: cy - 5, scale: 1, opacity: 0.9 },
+          {
+            x: cx - 5 + Math.cos(angle) * dist,
+            y: cy - 5 + Math.sin(angle) * dist,
+            scale: 0, opacity: 0,
+            duration: 0.38 + Math.random() * 0.15,
+            ease: 'power2.out',
+            onComplete: () => el.remove()
+          }
+        );
+      }
+    }
+
     function tick() {
       dir = nextDir;
       const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
@@ -529,8 +615,13 @@
       }
       snake.unshift(head);
       if (head.x === food.x && head.y === food.y) {
+        eatFlash();
         score++;
         scoreEl.textContent = score;
+        gsap.fromTo(scoreEl,
+          { scale: 1.8, color: '#4ade80' },
+          { scale: 1, color: '#444', duration: 0.45, ease: 'back.out(3)', overwrite: true }
+        );
         food = spawnFood();
       } else {
         snake.pop();
@@ -555,21 +646,27 @@
       alive = false;
       cancelAnimationFrame(raf);
 
-      ctx.fillStyle = 'rgba(13,13,13,0.8)';
+      ctx.fillStyle = 'rgba(13,13,13,0.72)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#555';
-      ctx.font = '12px -apple-system,sans-serif';
-      ctx.fillText(`score  ${score}`, canvas.width/2, canvas.height/2 - 8);
-      ctx.fillStyle = '#2a2a2a';
-      ctx.font = '11px -apple-system,sans-serif';
-      ctx.fillText('space to restart', canvas.width/2, canvas.height/2 + 12);
+
+      goScore.textContent = '';
+      gsap.set(goHint, { opacity: 0 });
+      gsap.set(goOverlay, { opacity: 1, pointerEvents: 'auto' });
+
+      gsap.to(goScore, {
+        duration: 0.9,
+        scrambleText: { text: `score  ${score}`, chars: '0123456789·', speed: 0.45 },
+        ease: 'none'
+      });
+      gsap.to(goHint, { opacity: 1, delay: 0.75, duration: 0.4 });
 
       if (score > 0) {
         await db.from('scores').insert({ username: USERNAME, score });
         loadLeaderboard();
       }
     }
+
+    goOverlay.addEventListener('click', () => { if (!alive) initGame(); });
 
     // Touch swipe controls for snake
     let touchX = 0, touchY = 0;
@@ -592,7 +689,6 @@
     }, { passive: true });
 
     document.addEventListener('keydown', e => {
-      // Don't hijack keys while typing in the chat input
       if (document.activeElement === input) return;
       switch (e.key) {
         case 'ArrowUp':    case 'w': case 'W': if (dir.y !==  1) nextDir={x:0,y:-1}; e.preventDefault(); break;
@@ -613,7 +709,6 @@
         .order('score', { ascending: false })
         .limit(500);
 
-      // Keep only the highest score per username (first seen = highest since ordered desc)
       const seen = new Set();
       const top10 = [];
       for (const row of (data || [])) {
@@ -630,6 +725,8 @@
         div.innerHTML = `<span class="lb-rank">${i+1}</span><span class="lb-name" style="color:${color}">${escHtml(name)}</span><span class="lb-score">${score}</span>`;
         lbRowsEl.appendChild(div);
       });
+
+      gsap.from('.lb-row', { x: -14, opacity: 0, stagger: 0.055, duration: 0.28, ease: 'power2.out' });
     }
 
     // ── Chat toggle (mobile) ────────────────────────────────
@@ -637,9 +734,17 @@
     const chatBackdrop = document.getElementById('chat-backdrop');
     const chatToggle   = document.getElementById('chat-toggle');
     const chatClose    = document.getElementById('chat-close');
+    const chatBadge    = document.getElementById('chat-badge');
 
-    function openChat()  { chatPanel.classList.add('open');    chatBackdrop.classList.add('visible'); }
-    function closeChat() { chatPanel.classList.remove('open'); chatBackdrop.classList.remove('visible'); }
+    function openChat() {
+      chatPanel.classList.add('open');
+      chatBackdrop.classList.add('visible');
+      gsap.to(chatBadge, { scale: 0, opacity: 0, duration: 0.2 });
+    }
+    function closeChat() {
+      chatPanel.classList.remove('open');
+      chatBackdrop.classList.remove('visible');
+    }
 
     chatToggle.addEventListener('click', openChat);
     chatBackdrop.addEventListener('click', closeChat);
@@ -750,6 +855,14 @@
           const wasAtBottom = atBottom();
           messagesEl.appendChild(renderMsg(msg, mine.has(msg.id)));
           if (wasAtBottom) scrollBottom();
+
+          // Badge on mobile when chat is closed
+          if (!chatPanel.classList.contains('open')) {
+            gsap.fromTo(chatBadge,
+              { scale: 0, opacity: 1 },
+              { scale: 1, opacity: 1, duration: 0.4, ease: 'back.out(3)' }
+            );
+          }
         })
         .subscribe();
     }
