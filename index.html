@@ -95,6 +95,13 @@
       text-align: right;
     }
 
+    .msg .name {
+      font-size: 0.72rem;
+      font-weight: 500;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
     .msg .text {
       font-size: 0.9rem;
       color: #d0d0d0;
@@ -169,7 +176,7 @@
 </head>
 <body>
   <header>
-    <h1>anon chat</h1>
+    <h1>advanced yotabyte operations chat</h1>
     <span>say anything</span>
     <div id="online">live</div>
   </header>
@@ -183,7 +190,7 @@
       <input id="input" type="text" placeholder="type something..." maxlength="500" autocomplete="off" />
       <button id="send" type="submit">send</button>
     </form>
-    <div id="hint">fully anonymous · no accounts · no logs</div>
+    <div id="hint">random handle · no accounts · no logs</div>
   </div>
 
   <script type="module">
@@ -199,12 +206,26 @@
     const form       = document.getElementById('form');
     const input      = document.getElementById('input');
 
-    // Stable session ID to highlight own messages (not sent to server)
-    const SESSION_ID = sessionStorage.getItem('sid') || (() => {
-      const id = Math.random().toString(36).slice(2);
-      sessionStorage.setItem('sid', id);
-      return id;
+    // Generate and persist a random handle
+    const ADJS  = ['swift','quiet','dark','cold','pale','dim','rough','bare','calm','lost','odd','thin','wild','stark','lean'];
+    const NOUNS = ['fox','crow','wolf','bear','hawk','ash','reed','moth','lynx','wren','pike','kite','fern','hare','rook'];
+
+    const USERNAME = localStorage.getItem('username') || (() => {
+      const a = ADJS[Math.floor(Math.random() * ADJS.length)];
+      const n = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+      const d = Math.floor(Math.random() * 90) + 10;
+      const u = `${a}-${n}-${d}`;
+      localStorage.setItem('username', u);
+      return u;
     })();
+
+    // Deterministic muted color per username
+    const NAME_COLORS = ['#5b8db8','#5fa870','#b85b5b','#b89a42','#7b5bb8','#42a898','#b85b98'];
+    function nameColor(name) {
+      let h = 0;
+      for (const c of name) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff;
+      return NAME_COLORS[Math.abs(h) % NAME_COLORS.length];
+    }
 
     // Track message IDs we sent this session
     const mine = new Set();
@@ -218,7 +239,9 @@
       const el = document.createElement('div');
       el.className = 'msg' + (isOwn ? ' mine' : '');
       el.dataset.id = msg.id;
-      el.innerHTML = `<span class="time">${fmt(msg.created_at)}</span><span class="text">${escHtml(msg.content)}</span>`;
+      const name = msg.username || '?';
+      const color = nameColor(name);
+      el.innerHTML = `<span class="time">${fmt(msg.created_at)}</span><span class="name" style="color:${color}">${escHtml(name)}</span><span class="text">${escHtml(msg.content)}</span>`;
       return el;
     }
 
@@ -269,7 +292,6 @@
       db.channel('messages')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
           const msg = payload.new;
-          // Skip if we already rendered it optimistically
           if (document.querySelector(`[data-id="${msg.id}"]`)) return;
           const wasAtBottom = atBottom();
           messagesEl.appendChild(renderMsg(msg, mine.has(msg.id)));
@@ -287,13 +309,12 @@
 
       const { data, error } = await db
         .from('messages')
-        .insert({ content })
+        .insert({ content, username: USERNAME })
         .select()
         .single();
 
       if (!error && data) {
         mine.add(data.id);
-        // Update the element if realtime already rendered it
         const existing = document.querySelector(`[data-id="${data.id}"]`);
         if (existing) existing.classList.add('mine');
       }
