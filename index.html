@@ -239,7 +239,7 @@
       const el = document.createElement('div');
       el.className = 'msg' + (isOwn ? ' mine' : '');
       el.dataset.id = msg.id;
-      const name = msg.username || '?';
+      const name = msg.username || 'anon';
       const color = nameColor(name);
       el.innerHTML = `<span class="time">${fmt(msg.created_at)}</span><span class="name" style="color:${color}">${escHtml(name)}</span><span class="text">${escHtml(msg.content)}</span>`;
       return el;
