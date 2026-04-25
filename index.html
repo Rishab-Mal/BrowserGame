@@ -500,15 +500,23 @@
         .from('scores')
         .select('username, score')
         .order('score', { ascending: false })
-        .limit(10);
+        .limit(500);
+
+      // Keep only the highest score per username (first seen = highest since ordered desc)
+      const seen = new Set();
+      const top10 = [];
+      for (const row of (data || [])) {
+        const name = row.username || 'anon';
+        if (!seen.has(name)) { seen.add(name); top10.push({ name, score: row.score }); }
+        if (top10.length === 10) break;
+      }
 
       lbRowsEl.innerHTML = '';
-      (data || []).forEach((row, i) => {
-        const name  = row.username || 'anon';
+      top10.forEach(({ name, score }, i) => {
         const color = nameColor(name);
         const div   = document.createElement('div');
         div.className = 'lb-row';
-        div.innerHTML = `<span class="lb-rank">${i+1}</span><span class="lb-name" style="color:${color}">${escHtml(name)}</span><span class="lb-score">${row.score}</span>`;
+        div.innerHTML = `<span class="lb-rank">${i+1}</span><span class="lb-name" style="color:${color}">${escHtml(name)}</span><span class="lb-score">${score}</span>`;
         lbRowsEl.appendChild(div);
       });
     }
