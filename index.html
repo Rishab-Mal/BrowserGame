@@ -77,7 +77,7 @@
       display: flex;
       gap: 0.75rem;
       padding: 0.35rem 0;
-      align-items: baseline;
+      align-items: flex-start;
       animation: fadein 0.15s ease;
     }
 
@@ -93,6 +93,7 @@
       flex-shrink: 0;
       width: 3.5rem;
       text-align: right;
+      padding-top: 0.15rem;
     }
 
     .msg .name {
@@ -100,6 +101,14 @@
       font-weight: 500;
       flex-shrink: 0;
       white-space: nowrap;
+      padding-top: 0.15rem;
+    }
+
+    .msg .body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      min-width: 0;
     }
 
     .msg .text {
@@ -111,12 +120,62 @@
 
     .msg.mine .text { color: #fff; }
 
+    .msg-img {
+      max-width: 260px;
+      max-height: 200px;
+      border-radius: 6px;
+      display: block;
+      cursor: pointer;
+      object-fit: cover;
+    }
+
+    .msg-file {
+      font-size: 0.8rem;
+      color: #5b8db8;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .msg-file:hover { text-decoration: underline; }
+
     #bottom-bar {
       width: 100%;
       max-width: 680px;
       padding: 0.75rem 1.25rem 1rem;
       border-top: 1px solid #1f1f1f;
     }
+
+    #file-preview {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding-bottom: 0.5rem;
+      font-size: 0.75rem;
+      color: #555;
+    }
+
+    #file-preview-img {
+      width: 36px;
+      height: 36px;
+      border-radius: 4px;
+      object-fit: cover;
+      display: none;
+    }
+
+    #file-remove {
+      background: none;
+      border: none;
+      color: #444;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 0 0.1rem;
+      margin-left: auto;
+    }
+
+    #file-remove:hover { color: #aaa; }
 
     #form {
       display: flex;
@@ -138,6 +197,20 @@
     #input:focus { border-color: #444; }
     #input::placeholder { color: #333; }
 
+    #attach {
+      background: #1f1f1f;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      color: #666;
+      padding: 0 0.8rem;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      line-height: 1;
+    }
+
+    #attach:hover { background: #2a2a2a; color: #aaa; }
+
     #send {
       background: #1f1f1f;
       border: 1px solid #2a2a2a;
@@ -151,6 +224,7 @@
     }
 
     #send:hover { background: #2a2a2a; color: #fff; }
+    #send:disabled { opacity: 0.4; cursor: default; }
 
     #hint {
       font-size: 0.7rem;
@@ -186,8 +260,15 @@
   </div>
 
   <div id="bottom-bar">
+    <div id="file-preview" hidden>
+      <img id="file-preview-img" alt="" />
+      <span id="file-name-label"></span>
+      <button id="file-remove">×</button>
+    </div>
     <form id="form">
       <input id="input" type="text" placeholder="type something..." maxlength="500" autocomplete="off" />
+      <input id="file-input" type="file" hidden />
+      <button id="attach" type="button">⌂</button>
       <button id="send" type="submit">send</button>
     </form>
     <div id="hint">random handle · no accounts · no logs</div>
@@ -201,10 +282,17 @@
 
     const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    const messagesEl = document.getElementById('messages');
-    const statusEl   = document.getElementById('status');
-    const form       = document.getElementById('form');
-    const input      = document.getElementById('input');
+    const messagesEl     = document.getElementById('messages');
+    const statusEl       = document.getElementById('status');
+    const form           = document.getElementById('form');
+    const input          = document.getElementById('input');
+    const fileInput      = document.getElementById('file-input');
+    const attachBtn      = document.getElementById('attach');
+    const sendBtn        = document.getElementById('send');
+    const filePreview    = document.getElementById('file-preview');
+    const filePreviewImg = document.getElementById('file-preview-img');
+    const fileNameLabel  = document.getElementById('file-name-label');
+    const fileRemove     = document.getElementById('file-remove');
 
     // Generate and persist a random handle
     const ADJS  = ['swift','quiet','dark','cold','pale','dim','rough','bare','calm','lost','odd','thin','wild','stark','lean'];
@@ -219,7 +307,6 @@
       return u;
     })();
 
-    // Deterministic muted color per username
     const NAME_COLORS = ['#5b8db8','#5fa870','#b85b5b','#b89a42','#7b5bb8','#42a898','#b85b98'];
     function nameColor(name) {
       let h = 0;
@@ -227,26 +314,49 @@
       return NAME_COLORS[Math.abs(h) % NAME_COLORS.length];
     }
 
-    // Track message IDs we sent this session
+    function isImageUrl(url) {
+      return /\.(jpg|jpeg|png|gif|webp|avif|svg)(\?|$)/i.test(url);
+    }
+
     const mine = new Set();
+    let selectedFile = null;
 
     function fmt(ts) {
       const d = new Date(ts);
       return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
     function renderMsg(msg, isOwn = false) {
       const el = document.createElement('div');
       el.className = 'msg' + (isOwn ? ' mine' : '');
       el.dataset.id = msg.id;
-      const name = msg.username || 'anon';
-      const color = nameColor(name);
-      el.innerHTML = `<span class="time">${fmt(msg.created_at)}</span><span class="name" style="color:${color}">${escHtml(name)}</span><span class="text">${escHtml(msg.content)}</span>`;
-      return el;
-    }
 
-    function escHtml(s) {
-      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      const name  = msg.username || 'anon';
+      const color = nameColor(name);
+
+      let bodyInner = '';
+      if (msg.content) {
+        bodyInner += `<span class="text">${escHtml(msg.content)}</span>`;
+      }
+      if (msg.file_url) {
+        if (isImageUrl(msg.file_url)) {
+          bodyInner += `<img class="msg-img" src="${escHtml(msg.file_url)}" loading="lazy" onclick="window.open(this.src,'_blank')" />`;
+        } else {
+          const fname = escHtml(msg.file_name || 'file');
+          bodyInner += `<a class="msg-file" href="${escHtml(msg.file_url)}" target="_blank">↓ ${fname}</a>`;
+        }
+      }
+
+      el.innerHTML = `
+        <span class="time">${fmt(msg.created_at)}</span>
+        <span class="name" style="color:${color}">${escHtml(name)}</span>
+        <div class="body">${bodyInner}</div>
+      `;
+      return el;
     }
 
     function scrollBottom() {
@@ -256,6 +366,43 @@
     function atBottom() {
       return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 80;
     }
+
+    async function uploadFile(file) {
+      const ext  = file.name.includes('.') ? file.name.split('.').pop() : 'bin';
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await db.storage.from('chat-files').upload(path, file);
+      if (error) throw error;
+      const { data: { publicUrl } } = db.storage.from('chat-files').getPublicUrl(path);
+      return publicUrl;
+    }
+
+    function clearFile() {
+      selectedFile = null;
+      fileInput.value = '';
+      filePreview.hidden = true;
+      filePreviewImg.style.display = 'none';
+      filePreviewImg.src = '';
+      fileNameLabel.textContent = '';
+    }
+
+    // File selection
+    attachBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      selectedFile = file;
+      fileNameLabel.textContent = file.name;
+      filePreview.hidden = false;
+      if (file.type.startsWith('image/')) {
+        filePreviewImg.style.display = 'block';
+        filePreviewImg.src = URL.createObjectURL(file);
+      } else {
+        filePreviewImg.style.display = 'none';
+      }
+    });
+
+    fileRemove.addEventListener('click', clearFile);
 
     // Load recent messages
     async function loadMessages() {
@@ -304,14 +451,35 @@
     form.addEventListener('submit', async e => {
       e.preventDefault();
       const content = input.value.trim();
-      if (!content) return;
+      if (!content && !selectedFile) return;
+
       input.value = '';
+      sendBtn.disabled = true;
+      sendBtn.textContent = '...';
+
+      let file_url  = null;
+      let file_name = null;
+
+      if (selectedFile) {
+        try {
+          file_url  = await uploadFile(selectedFile);
+          file_name = selectedFile.name;
+        } catch {
+          sendBtn.disabled = false;
+          sendBtn.textContent = 'send';
+          return;
+        }
+        clearFile();
+      }
 
       const { data, error } = await db
         .from('messages')
-        .insert({ content, username: USERNAME })
+        .insert({ content, username: USERNAME, file_url, file_name })
         .select()
         .single();
+
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'send';
 
       if (!error && data) {
         mine.add(data.id);
