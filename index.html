@@ -501,10 +501,12 @@
     </div>
   </div>
 
+  <script src="./gsap-public/minified/gsap.min.js"></script>
+  <script src="./gsap-public/minified/ScrambleTextPlugin.min.js"></script>
   <script type="module">
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-    import gsap from './gsap-public/esm/index.js';
-    import { ScrambleTextPlugin } from './gsap-public/esm/ScrambleTextPlugin.js';
+    const gsap = window.gsap;
+    const { ScrambleTextPlugin } = window;
     gsap.registerPlugin(ScrambleTextPlugin);
 
     const SUPABASE_URL = 'https://fnwijpyzupydilyezwmn.supabase.co';
