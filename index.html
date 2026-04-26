@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>Graffiti Wall</title>
+  <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -123,6 +124,26 @@
     }
 
     /* ── Loader ── */
+    /* ── Text input overlay ── */
+    #text-wrap {
+      position: fixed;
+      z-index: 50;
+      display: none;
+      pointer-events: auto;
+    }
+
+    #text-inp {
+      background: transparent;
+      border: none;
+      border-bottom: 2px dashed rgba(255,255,255,0.45);
+      outline: none;
+      padding: 2px 4px;
+      font-family: 'Permanent Marker', Impact, sans-serif;
+      caret-color: #fff;
+      min-width: 20px;
+      max-width: 600px;
+    }
+
     #loader {
       position: fixed;
       inset: 0;
@@ -141,6 +162,7 @@
 
   <div id="loader">loading wall...</div>
   <div id="spray-cursor"></div>
+  <div id="text-wrap"><input id="text-inp" type="text" placeholder="type..." maxlength="120" autocomplete="off" spellcheck="false" /></div>
 
   <div id="viewport">
     <canvas id="wall"></canvas>
@@ -151,6 +173,7 @@
     <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
       <button class="tool-btn active" data-tool="paint" title="Paint (P)">✏</button>
       <button class="tool-btn"        data-tool="pan"   title="Pan (V / Space)">✋</button>
+      <button class="tool-btn"        data-tool="text"  title="Text (T)">T</button>
     </div>
     <div class="sep"></div>
     <!-- Palette -->
@@ -295,16 +318,48 @@
       ctx.globalAlpha = 1;
     }
 
+    // ── Text drawing ──────────────────────────────────────────
+    function drawText(x, y, text, color, size) {
+      const fontSize = size * 3 + 16;
+      ctx.save();
+      ctx.font        = `${fontSize}px 'Permanent Marker', Impact, sans-serif`;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign    = 'left';
+      ctx.lineJoin     = 'round';
+      ctx.lineCap      = 'round';
+      // Thick dark outline
+      ctx.strokeStyle = 'rgba(0,0,0,0.88)';
+      ctx.lineWidth   = fontSize * 0.18;
+      ctx.strokeText(text, x, y);
+      // Color fill
+      ctx.fillStyle = color;
+      ctx.fillText(text, x, y);
+      ctx.restore();
+    }
+
     // ── Socket ────────────────────────────────────────────────
     const loader = document.getElementById('loader');
+    let initDone = false;
 
     socket.on('init', events => {
       events.forEach(e => spray(e.x, e.y, e.color, e.size, e.seed, true));
+      if (initDone) return;
+      initDone = true;
+      gsap.to(loader, { opacity: 0, duration: 0.5, onComplete: () => loader.remove() });
+      gsap.from('#toolbar', { y: 62, duration: 0.55, ease: 'power3.out', delay: 0.15 });
+    });
+
+    socket.on('init_texts', async items => {
+      await document.fonts.ready;
+      items.forEach(t => drawText(t.x, t.y, t.text, t.color, t.size));
+      if (initDone) return;
+      initDone = true;
       gsap.to(loader, { opacity: 0, duration: 0.5, onComplete: () => loader.remove() });
       gsap.from('#toolbar', { y: 62, duration: 0.55, ease: 'power3.out', delay: 0.15 });
     });
 
     socket.on('spray', e => spray(e.x, e.y, e.color, e.size, e.seed));
+    socket.on('text',  t => drawText(t.x, t.y, t.text, t.color, t.size));
 
     // ── Input state ───────────────────────────────────────────
     let mode      = 'paint'; // 'paint' | 'pan'
@@ -326,6 +381,9 @@
       if (isPanMode()) {
         viewport.style.cursor = panning ? 'grabbing' : 'grab';
         gsap.to('#spray-cursor', { opacity: 0, duration: 0.1 });
+      } else if (mode === 'text') {
+        viewport.style.cursor = 'text';
+        gsap.to('#spray-cursor', { opacity: 0, duration: 0.1 });
       } else {
         viewport.style.cursor = 'none';
       }
@@ -336,6 +394,7 @@
       if (e.code === 'Space' && !e.repeat) { spaceDown = true; refreshCursor(); e.preventDefault(); }
       if (e.code === 'KeyV') { setTool('pan'); }
       if (e.code === 'KeyP' || e.code === 'KeyB') { setTool('paint'); }
+      if (e.code === 'KeyT') { setTool('text'); }
     });
     document.addEventListener('keyup', e => {
       if (e.code === 'Space') { spaceDown = false; refreshCursor(); }
@@ -456,6 +515,53 @@
 
     viewport.addEventListener('touchend', () => {
       stopPainting(); touchPainting = false; lastTouches = null;
+    });
+
+    // ── Text tool ─────────────────────────────────────────────
+    const textWrap = document.getElementById('text-wrap');
+    const textInp  = document.getElementById('text-inp');
+    let   textPos  = null;
+
+    function showTextInput(worldX, worldY) {
+      const rect     = viewport.getBoundingClientRect();
+      const fontSize = (currentSize * 3 + 16) * zoom;
+      const sx       = rect.left + panX + worldX * zoom;
+      const sy       = rect.top  + panY + worldY * zoom;
+
+      textInp.style.fontSize = fontSize + 'px';
+      textInp.style.color    = currentColor;
+      textInp.value          = '';
+      textWrap.style.left    = sx + 'px';
+      textWrap.style.top     = (sy - fontSize / 2) + 'px';
+      textWrap.style.display = 'block';
+      textInp.focus();
+    }
+
+    function commitText() {
+      const txt = textInp.value.trim();
+      textWrap.style.display = 'none';
+      if (!txt || !textPos) { textPos = null; return; }
+      const { x, y } = textPos;
+      textPos = null;
+      drawText(x, y, txt, currentColor, currentSize);
+      socket.emit('text', { x, y, text: txt, color: currentColor, size: currentSize });
+    }
+
+    // Click on wall in text mode → place input
+    viewport.addEventListener('click', e => {
+      if (mode !== 'text' || panning) return;
+      textPos = toWorld(e.clientX, e.clientY);
+      showTextInput(textPos.x, textPos.y);
+    });
+
+    textInp.addEventListener('keydown', e => {
+      if (e.key === 'Enter')  { e.preventDefault(); commitText(); }
+      if (e.key === 'Escape') { textWrap.style.display = 'none'; textPos = null; }
+      e.stopPropagation(); // don't trigger tool shortcuts while typing
+    });
+
+    textInp.addEventListener('blur', () => {
+      setTimeout(() => { if (textWrap.style.display !== 'none') commitText(); }, 120);
     });
 
     // ── Toolbar: tools ────────────────────────────────────────
