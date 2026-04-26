@@ -17,11 +17,16 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     }
 
-    #wall {
+    #viewport {
       flex: 1;
-      display: block;
-      width: 100%;
-      cursor: none;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #wall {
+      position: absolute;
+      top: 0; left: 0;
+      transform-origin: 0 0;
     }
 
     #spray-cursor {
@@ -38,9 +43,8 @@
       content: '';
       position: absolute;
       top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      width: 3px;
-      height: 3px;
+      transform: translate(-50%,-50%);
+      width: 3px; height: 3px;
       border-radius: 50%;
       background: rgba(255,255,255,0.7);
     }
@@ -62,50 +66,43 @@
     #toolbar::-webkit-scrollbar { display: none; }
 
     .swatch {
-      width: 28px;
-      height: 28px;
+      width: 28px; height: 28px;
       border-radius: 50%;
       cursor: pointer;
       flex-shrink: 0;
       border: 3px solid #1a0c08;
       box-shadow: 0 2px 6px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.15);
+      transition: transform 0.1s;
     }
 
-    .swatch.active {
-      border-color: #fff;
-      box-shadow: 0 0 0 2px #fff, 0 2px 8px rgba(0,0,0,0.7);
-    }
+    .swatch:hover { transform: scale(1.15); }
+    .swatch.active { border-color: #fff; box-shadow: 0 0 0 2px #fff, 0 2px 8px rgba(0,0,0,0.7); }
 
-    #sep {
-      width: 1px;
-      height: 30px;
-      background: #2a1208;
-      flex-shrink: 0;
-      margin: 0 3px;
-    }
+    .sep { width: 1px; height: 30px; background: #2a1208; flex-shrink: 0; margin: 0 3px; }
 
-    .size-btn {
-      width: 28px;
-      height: 28px;
+    .size-btn, .tool-btn {
+      width: 28px; height: 28px;
       border-radius: 50%;
       background: #1a0c08;
       border: 2px solid #3a1a0a;
       color: #664428;
-      font-size: 0.68rem;
+      font-size: 0.7rem;
       font-weight: 700;
       cursor: pointer;
       flex-shrink: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-      letter-spacing: 0;
+      transition: border-color 0.1s, color 0.1s;
     }
 
-    .size-btn.active { border-color: #fff; color: #fff; }
+    .size-btn.active, .tool-btn.active { border-color: #fff; color: #fff; }
+    .size-btn:hover, .tool-btn:hover   { border-color: #888; color: #ccc; }
+
+    .tool-btn { font-size: 0.9rem; }
 
     #color-input {
-      width: 28px;
-      height: 28px;
+      width: 28px; height: 28px;
       border-radius: 50%;
       border: 3px solid #1a0c08;
       cursor: pointer;
@@ -113,6 +110,16 @@
       background: none;
       flex-shrink: 0;
       box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    }
+
+    #zoom-label {
+      font-size: 0.6rem;
+      color: #3a2010;
+      white-space: nowrap;
+      flex-shrink: 0;
+      margin-left: auto;
+      min-width: 3rem;
+      text-align: right;
     }
 
     /* ── Loader ── */
@@ -135,18 +142,29 @@
   <div id="loader">loading wall...</div>
   <div id="spray-cursor"></div>
 
-  <canvas id="wall"></canvas>
+  <div id="viewport">
+    <canvas id="wall"></canvas>
+  </div>
 
   <div id="toolbar">
+    <!-- Tools -->
+    <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+      <button class="tool-btn active" data-tool="paint" title="Paint (P)">✏</button>
+      <button class="tool-btn"        data-tool="pan"   title="Pan (V / Space)">✋</button>
+    </div>
+    <div class="sep"></div>
+    <!-- Palette -->
     <div id="palette" style="display:flex;gap:6px;align-items:center;flex-shrink:0;"></div>
-    <div id="sep"></div>
-    <div id="sizes" style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+    <div class="sep"></div>
+    <!-- Sizes -->
+    <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
       <button class="size-btn active" data-size="12">S</button>
       <button class="size-btn"        data-size="24">M</button>
       <button class="size-btn"        data-size="44">L</button>
     </div>
-    <div id="sep"></div>
+    <div class="sep"></div>
     <input type="color" id="color-input" value="#ff2200" />
+    <span id="zoom-label">100%</span>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -155,112 +173,125 @@
     const gsap   = window.gsap;
     const socket = io();
 
-    // ── Canvas ───────────────────────────────────────────────
-    const canvas = document.getElementById('wall');
-    const ctx    = canvas.getContext('2d');
-    canvas.width  = window.innerWidth;
-    canvas.height = window.innerHeight - 62;
+    // ── World canvas ─────────────────────────────────────────
+    const WORLD_W = 5000, WORLD_H = 2800;
+    const MIN_ZOOM = 0.08, MAX_ZOOM = 8;
 
-    // ── Brick wall background ────────────────────────────────
-    // roundRect polyfill
+    const viewport = document.getElementById('viewport');
+    const canvas   = document.getElementById('wall');
+    const ctx      = canvas.getContext('2d');
+    canvas.width   = WORLD_W;
+    canvas.height  = WORLD_H;
+
+    // Pan/zoom state
+    let zoom = 1, panX = 0, panY = 0;
+
+    function applyTransform() {
+      canvas.style.transform = `translate(${panX}px,${panY}px) scale(${zoom})`;
+      document.getElementById('zoom-label').textContent = Math.round(zoom * 100) + '%';
+    }
+
+    function zoomAt(sx, sy, factor) {
+      const rect = viewport.getBoundingClientRect();
+      const rx   = sx - rect.left;
+      const ry   = sy - rect.top;
+      const nz   = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * factor));
+      if (nz === zoom) return;
+      panX = rx - (rx - panX) * (nz / zoom);
+      panY = ry - (ry - panY) * (nz / zoom);
+      zoom = nz;
+      applyTransform();
+    }
+
+    // World coords from screen
+    function toWorld(sx, sy) {
+      const rect = viewport.getBoundingClientRect();
+      return {
+        x: (sx - rect.left  - panX) / zoom,
+        y: (sy - rect.top   - panY) / zoom,
+      };
+    }
+
+    // Center the wall initially, fitting it in the viewport
+    function initView() {
+      const vw = viewport.offsetWidth;
+      const vh = viewport.offsetHeight;
+      zoom = Math.min(vw / WORLD_W, vh / WORLD_H) * 0.92;
+      panX = (vw - WORLD_W * zoom) / 2;
+      panY = (vh - WORLD_H * zoom) / 2;
+      applyTransform();
+    }
+
+    // ── Brick wall ────────────────────────────────────────────
     if (!CanvasRenderingContext2D.prototype.roundRect) {
       CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
-        r = Math.min(+r || 0, w / 2, h / 2);
+        r = Math.min(+r || 0, w/2, h/2);
         this.beginPath();
-        this.moveTo(x + r, y);
-        this.lineTo(x + w - r, y);
-        this.arcTo(x + w, y,     x + w, y + r,     r);
-        this.lineTo(x + w, y + h - r);
-        this.arcTo(x + w, y + h, x + w - r, y + h, r);
-        this.lineTo(x + r, y + h);
-        this.arcTo(x,     y + h, x,     y + h - r, r);
-        this.lineTo(x,     y + r);
-        this.arcTo(x,     y,     x + r, y,          r);
+        this.moveTo(x+r, y); this.lineTo(x+w-r, y);
+        this.arcTo(x+w, y,   x+w, y+r,   r);
+        this.lineTo(x+w, y+h-r);
+        this.arcTo(x+w, y+h, x+w-r, y+h, r);
+        this.lineTo(x+r, y+h);
+        this.arcTo(x,   y+h, x, y+h-r,   r);
+        this.lineTo(x,  y+r);
+        this.arcTo(x,   y,   x+r, y,      r);
         this.closePath();
       };
     }
 
     function drawBricks() {
-      const w = canvas.width, h = canvas.height;
       const BW = 74, BH = 30, M = 7;
+      const BRICK = ['#c04020','#ca4424','#b83818','#d04a28','#bc3c1e','#c84222','#b23516','#c63e20'];
 
-      // Mortar
       ctx.fillStyle = '#c8a87a';
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillRect(0, 0, WORLD_W, WORLD_H);
 
-      const BRICK = [
-        '#c04020','#ca4424','#b83818','#d04a28',
-        '#bc3c1e','#c84222','#b23516','#c63e20',
-      ];
-
-      const rows = Math.ceil(h / (BH + M)) + 1;
+      const rows = Math.ceil(WORLD_H / (BH + M)) + 1;
+      const cols = Math.ceil(WORLD_W / (BW + M)) + 2;
 
       for (let r = 0; r <= rows; r++) {
         const y      = r * (BH + M) - M * 0.5;
         const offset = r % 2 === 0 ? 0 : (BW + M) * 0.5;
-        const cols   = Math.ceil(w / (BW + M)) + 2;
-
         for (let c = -1; c <= cols; c++) {
           const bx = c * (BW + M) - offset + M * 0.5;
           const by = y + M * 0.5;
-          const ci = Math.abs(r * 7 + c * 13 + r ^ c) % BRICK.length;
-
-          // Body
+          const ci = Math.abs(r * 7 + c * 13 + (r ^ c)) % BRICK.length;
           ctx.fillStyle = BRICK[ci];
-          ctx.roundRect(bx, by, BW, BH, 4);
-          ctx.fill();
-
-          // Top highlight
+          ctx.roundRect(bx, by, BW, BH, 4); ctx.fill();
           ctx.fillStyle = 'rgba(255,210,160,0.2)';
-          ctx.roundRect(bx, by, BW, BH * 0.38, [4, 4, 0, 0]);
-          ctx.fill();
-
-          // Bottom shadow
+          ctx.roundRect(bx, by, BW, BH * 0.38, [4,4,0,0]); ctx.fill();
           ctx.fillStyle = 'rgba(0,0,0,0.25)';
-          ctx.roundRect(bx, by + BH * 0.66, BW, BH * 0.34, [0, 0, 4, 4]);
-          ctx.fill();
-
-          // Outline
-          ctx.strokeStyle = '#180806';
-          ctx.lineWidth   = 2.5;
-          ctx.roundRect(bx, by, BW, BH, 4);
-          ctx.stroke();
+          ctx.roundRect(bx, by + BH*0.66, BW, BH*0.34, [0,0,4,4]); ctx.fill();
+          ctx.strokeStyle = '#180806'; ctx.lineWidth = 2.5;
+          ctx.roundRect(bx, by, BW, BH, 4); ctx.stroke();
         }
       }
     }
 
     drawBricks();
+    initView();
 
-    // ── Spray paint ──────────────────────────────────────────
-    // Seeded PRNG so every client draws identical spray from same event
+    // ── Seeded spray ──────────────────────────────────────────
     function seededRand(seed) {
       let s = seed | 0;
-      return () => {
-        s ^= s << 13; s ^= s >> 17; s ^= s << 5;
-        return (s >>> 0) / 0xffffffff;
-      };
+      return () => { s ^= s<<13; s ^= s>>17; s ^= s<<5; return (s>>>0)/0xffffffff; };
     }
 
     function spray(x, y, color, size, seed) {
-      const rand    = seededRand(seed);
-      const density = 32;
-      ctx.shadowColor = color;
-      ctx.shadowBlur  = 4;
-      for (let i = 0; i < density; i++) {
-        const r     = rand() * rand() * size;
-        const angle = rand() * Math.PI * 2;
-        const dotR  = rand() * 2.4 + 0.3;
-        ctx.globalAlpha = rand() * 0.6 + 0.2;
+      const rand = seededRand(seed);
+      ctx.shadowColor = color; ctx.shadowBlur = 4;
+      for (let i = 0; i < 32; i++) {
+        const r = rand()*rand()*size, a = rand()*Math.PI*2;
+        ctx.globalAlpha = rand()*0.6+0.2;
         ctx.fillStyle   = color;
         ctx.beginPath();
-        ctx.arc(x + Math.cos(angle) * r, y + Math.sin(angle) * r, dotR, 0, Math.PI * 2);
+        ctx.arc(x+Math.cos(a)*r, y+Math.sin(a)*r, rand()*2.4+0.3, 0, Math.PI*2);
         ctx.fill();
       }
-      ctx.shadowBlur  = 0;
-      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
     }
 
-    // ── Socket ───────────────────────────────────────────────
+    // ── Socket ────────────────────────────────────────────────
     const loader = document.getElementById('loader');
 
     socket.on('init', events => {
@@ -271,77 +302,172 @@
 
     socket.on('spray', e => spray(e.x, e.y, e.color, e.size, e.seed));
 
-    // ── Painting ─────────────────────────────────────────────
-    let painting     = false;
+    // ── Input state ───────────────────────────────────────────
+    let mode      = 'paint'; // 'paint' | 'pan'
+    let spaceDown = false;
+    let painting  = false;
+    let panning   = false;
+    let panStart  = { x:0, y:0 };
+    let panOrigin = { x:0, y:0 };
+    let mousePos  = { x:0, y:0 };
+    let lastPos   = null;
+    let sprayTimer = null;
+
     let currentColor = '#ff2200';
     let currentSize  = 12;
-    let mousePos     = { x: 0, y: 0 };
-    let lastPos      = null;
-    let sprayTimer   = null;
 
-    function getPos(e) {
-      const rect = canvas.getBoundingClientRect();
-      const src  = e.touches ? e.touches[0] : e;
-      return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+    function isPanMode() { return mode === 'pan' || spaceDown; }
+
+    function refreshCursor() {
+      if (isPanMode()) {
+        viewport.style.cursor = panning ? 'grabbing' : 'grab';
+        gsap.to('#spray-cursor', { opacity: 0, duration: 0.1 });
+      } else {
+        viewport.style.cursor = 'none';
+      }
     }
 
-    function doSpray(x, y) {
+    // ── Keyboard ──────────────────────────────────────────────
+    document.addEventListener('keydown', e => {
+      if (e.code === 'Space' && !e.repeat) { spaceDown = true; refreshCursor(); e.preventDefault(); }
+      if (e.code === 'KeyV') { setTool('pan'); }
+      if (e.code === 'KeyP' || e.code === 'KeyB') { setTool('paint'); }
+    });
+    document.addEventListener('keyup', e => {
+      if (e.code === 'Space') { spaceDown = false; refreshCursor(); }
+    });
+
+    // ── Pan helpers ───────────────────────────────────────────
+    function startPan(sx, sy) {
+      panning   = true;
+      panStart  = { x: sx, y: sy };
+      panOrigin = { x: panX, y: panY };
+      refreshCursor();
+    }
+    function doPan(sx, sy) {
+      if (!panning) return;
+      panX = panOrigin.x + (sx - panStart.x);
+      panY = panOrigin.y + (sy - panStart.y);
+      applyTransform();
+    }
+    function stopPan() {
+      panning = false;
+      refreshCursor();
+    }
+
+    // ── Paint helpers ─────────────────────────────────────────
+    function doSpray(sx, sy) {
+      const { x, y } = toWorld(sx, sy);
+      if (x < 0 || x > WORLD_W || y < 0 || y > WORLD_H) return;
       const seed = Math.random() * 0xffffff | 0;
       spray(x, y, currentColor, currentSize, seed);
       socket.emit('spray', { x, y, color: currentColor, size: currentSize, seed });
     }
-
-    function startPainting(e) {
+    function startPainting(sx, sy) {
       painting = true;
-      const p = getPos(e);
-      mousePos = p;
-      doSpray(p.x, p.y);
-      lastPos = { ...p };
+      doSpray(sx, sy);
+      lastPos  = { x: sx, y: sy };
       clearInterval(sprayTimer);
       sprayTimer = setInterval(() => doSpray(mousePos.x, mousePos.y), 40);
     }
-
-    function movePainting(e) {
-      const p = getPos(e);
-      mousePos = p;
+    function movePainting(sx, sy) {
       if (!painting) return;
-      const dx = p.x - (lastPos?.x ?? p.x);
-      const dy = p.y - (lastPos?.y ?? p.y);
-      if (dx*dx + dy*dy >= 9) { doSpray(p.x, p.y); lastPos = { ...p }; }
+      const dx = sx - (lastPos?.x ?? sx), dy = sy - (lastPos?.y ?? sy);
+      if (dx*dx + dy*dy >= 9) { doSpray(sx, sy); lastPos = { x:sx, y:sy }; }
     }
-
     function stopPainting() {
       painting = false;
       clearInterval(sprayTimer);
       lastPos = null;
     }
 
-    canvas.addEventListener('mousedown',  startPainting);
-    canvas.addEventListener('mousemove',  movePainting);
-    window.addEventListener('mouseup',    stopPainting);
-    canvas.addEventListener('touchstart', e => { startPainting(e); e.preventDefault(); }, { passive: false });
-    canvas.addEventListener('touchmove',  e => { movePainting(e);  e.preventDefault(); }, { passive: false });
-    window.addEventListener('touchend',   stopPainting);
-
-    // ── Spray cursor ─────────────────────────────────────────
-    const cursorEl = document.getElementById('spray-cursor');
-    function setCursorStyle() {
-      gsap.set(cursorEl, {
-        width:       currentSize * 2,
-        height:      currentSize * 2,
-        borderColor: currentColor + '99',
-      });
-    }
-    setCursorStyle();
-
-    canvas.addEventListener('mousemove', e => {
-      gsap.set(cursorEl, { x: e.clientX, y: e.clientY, xPercent: -50, yPercent: -50 });
+    // ── Mouse events ──────────────────────────────────────────
+    viewport.addEventListener('mousedown', e => {
+      if (e.button === 1 || e.button === 2 || isPanMode()) { startPan(e.clientX, e.clientY); }
+      else { startPainting(e.clientX, e.clientY); }
     });
-    canvas.addEventListener('mouseenter', () => gsap.to(cursorEl, { opacity: 1, duration: 0.15 }));
-    canvas.addEventListener('mouseleave', () => gsap.to(cursorEl, { opacity: 0, duration: 0.15 }));
-    document.getElementById('toolbar').addEventListener('mouseenter', () => gsap.to(cursorEl, { opacity: 0, duration: 0.1 }));
 
-    // ── Palette ───────────────────────────────────────────────
+    window.addEventListener('mousemove', e => {
+      mousePos = { x: e.clientX, y: e.clientY };
+      if (panning) { doPan(e.clientX, e.clientY); return; }
+      if (!isPanMode()) {
+        gsap.set('#spray-cursor', { x: e.clientX, y: e.clientY, xPercent: -50, yPercent: -50 });
+        movePainting(e.clientX, e.clientY);
+      }
+    });
+
+    window.addEventListener('mouseup', () => { stopPainting(); stopPan(); });
+    viewport.addEventListener('contextmenu', e => e.preventDefault());
+
+    viewport.addEventListener('mouseenter', () => {
+      if (!isPanMode()) gsap.to('#spray-cursor', { opacity: 1, duration: 0.15 });
+    });
+    viewport.addEventListener('mouseleave', () => {
+      gsap.to('#spray-cursor', { opacity: 0, duration: 0.15 });
+      stopPainting(); stopPan();
+    });
+
+    // ── Scroll to zoom ────────────────────────────────────────
+    viewport.addEventListener('wheel', e => {
+      e.preventDefault();
+      zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.1 : 1/1.1);
+    }, { passive: false });
+
+    // ── Touch ─────────────────────────────────────────────────
+    let lastTouches = null;
+    let touchPainting = false;
+
+    viewport.addEventListener('touchstart', e => {
+      if (e.touches.length === 1) {
+        touchPainting = true;
+        startPainting(e.touches[0].clientX, e.touches[0].clientY);
+      } else {
+        stopPainting(); touchPainting = false;
+        lastTouches = [...e.touches];
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    viewport.addEventListener('touchmove', e => {
+      if (e.touches.length === 1 && touchPainting) {
+        mousePos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        movePainting(e.touches[0].clientX, e.touches[0].clientY);
+      } else if (e.touches.length === 2 && lastTouches) {
+        const [t1, t2]   = [...e.touches];
+        const [lt1, lt2] = lastTouches;
+        const midX  = (t1.clientX  + t2.clientX)  / 2;
+        const midY  = (t1.clientY  + t2.clientY)  / 2;
+        const lmidX = (lt1.clientX + lt2.clientX) / 2;
+        const lmidY = (lt1.clientY + lt2.clientY) / 2;
+        const dist  = Math.hypot(t2.clientX-t1.clientX,   t2.clientY-t1.clientY);
+        const ldist = Math.hypot(lt2.clientX-lt1.clientX, lt2.clientY-lt1.clientY);
+        zoomAt(lmidX, lmidY, dist / ldist);
+        panX += midX - lmidX;
+        panY += midY - lmidY;
+        applyTransform();
+        lastTouches = [...e.touches];
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    viewport.addEventListener('touchend', () => {
+      stopPainting(); touchPainting = false; lastTouches = null;
+    });
+
+    // ── Toolbar: tools ────────────────────────────────────────
+    function setTool(t) {
+      mode = t;
+      document.querySelectorAll('.tool-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.tool === t);
+      });
+      refreshCursor();
+    }
+
+    document.querySelectorAll('.tool-btn').forEach(btn => {
+      btn.addEventListener('click', () => setTool(btn.dataset.tool));
+    });
+
+    // ── Toolbar: palette ──────────────────────────────────────
     const COLORS = [
       '#ff2200','#ff7700','#ffee00','#44ff00','#00ffaa',
       '#00ccff','#4400ff','#dd00ff','#ff0088','#ffffff',
@@ -351,13 +477,18 @@
     const paletteEl  = document.getElementById('palette');
     const colorInput = document.getElementById('color-input');
 
-    function selectColor(color, swatchEl) {
+    function setCursorStyle() {
+      gsap.set('#spray-cursor', {
+        width: currentSize * 2, height: currentSize * 2,
+        borderColor: currentColor + '99',
+      });
+    }
+    setCursorStyle();
+
+    function selectColor(color, el) {
       currentColor = color;
       document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
-      if (swatchEl) {
-        swatchEl.classList.add('active');
-        gsap.fromTo(swatchEl, { scale: 1.4 }, { scale: 1, duration: 0.4, ease: 'elastic.out(1,0.5)' });
-      }
+      if (el) { el.classList.add('active'); gsap.fromTo(el, {scale:1.4},{scale:1,duration:0.4,ease:'elastic.out(1,0.5)'}); }
       colorInput.value = /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#ff2200';
       setCursorStyle();
     }
@@ -374,13 +505,13 @@
     colorInput.addEventListener('input',  e => selectColor(e.target.value, null));
     colorInput.addEventListener('change', e => selectColor(e.target.value, null));
 
-    // Size buttons
+    // ── Toolbar: sizes ────────────────────────────────────────
     document.querySelectorAll('.size-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentSize = +btn.dataset.size;
-        gsap.fromTo(btn, { scale: 1.35 }, { scale: 1, duration: 0.35, ease: 'back.out(2)' });
+        gsap.fromTo(btn, { scale:1.35 }, { scale:1, duration:0.35, ease:'back.out(2)' });
         setCursorStyle();
       });
     });
