@@ -95,7 +95,7 @@
       transition: border-color 0.1s;
     }
 
-    #eraser:hover { border-color: #555; color: #aaa; }
+    #eraser:hover  { border-color: #555; color: #aaa; }
     #eraser.active { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #333; }
 
     #hint {
@@ -136,14 +136,11 @@
     <span id="hint">click or drag to paint</span>
   </div>
 
-  <script src="./gsap-public/minified/gsap.min.js"></script>
-  <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-    const gsap = window.gsap;
-
-    const SUPABASE_URL = 'https://fnwijpyzupydilyezwmn.supabase.co';
-    const SUPABASE_KEY = 'sb_publishable_JnINm8V2SsPlmLky6YMWKA_1KuDunPu';
-    const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/gsap-public/minified/gsap.min.js"></script>
+  <script>
+    const gsap   = window.gsap;
+    const socket = io();
 
     // ── Canvas setup ────────────────────────────────────────
     const GRID    = 100;
@@ -155,23 +152,19 @@
     canvas.width  = GRID * CELL;
     canvas.height = GRID * CELL;
 
-    const BG   = '#e8e8e8'; // grid line color
-    const VOID = '#ffffff'; // unpainted pixel color
+    const BG   = '#e8e8e8';
+    const VOID = '#ffffff';
 
-    // Fill background (grid lines)
+    // Draw grid background
     ctx.fillStyle = BG;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Fill all pixels white
     ctx.fillStyle = VOID;
-    for (let x = 0; x < GRID; x++) {
-      for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++)
+      for (let y = 0; y < GRID; y++)
         ctx.fillRect(x*CELL+1, y*CELL+1, CELL-1, CELL-1);
-      }
-    }
 
     // Local pixel state
-    const pixelData = new Map(); // 'x,y' → color
+    const pixelData = new Map();
 
     function drawPixel(x, y, color) {
       pixelData.set(`${x},${y}`, color);
@@ -179,16 +172,40 @@
       ctx.fillRect(x*CELL+1, y*CELL+1, CELL-1, CELL-1);
     }
 
-    // ── Load from DB ────────────────────────────────────────
-    async function loadPixels() {
-      const { data } = await db.from('pixels').select('x, y, color');
-      (data || []).forEach(({ x, y, color }) => drawPixel(x, y, color));
+    // Flash effect for remote paints
+    function remoteFlash(x, y, color) {
+      const rect   = canvas.getBoundingClientRect();
+      const scaleX = rect.width / canvas.width;
+      const el     = document.createElement('div');
+      const sz     = CELL * scaleX;
+      el.style.cssText = `position:fixed;width:${sz}px;height:${sz}px;
+        left:${rect.left + x*CELL*scaleX}px;top:${rect.top + y*CELL*scaleX}px;
+        background:${color};pointer-events:none;z-index:10;`;
+      document.body.appendChild(el);
+      gsap.fromTo(el,
+        { opacity: 0.75, scale: 1.6 },
+        { opacity: 0, scale: 1, duration: 0.32, ease: 'power2.out', onComplete: () => el.remove() }
+      );
     }
+
+    // ── Socket events ────────────────────────────────────────
+    const loader = document.getElementById('loader');
+
+    socket.on('init', pixels => {
+      pixels.forEach(({ x, y, color }) => drawPixel(x, y, color));
+      gsap.to(loader, { opacity: 0, duration: 0.4, onComplete: () => loader.remove() });
+      gsap.from('#toolbar', { y: 52, duration: 0.5, ease: 'power3.out', delay: 0.1 });
+    });
+
+    socket.on('paint', ({ x, y, color }) => {
+      if (pixelData.get(`${x},${y}`) === color) return;
+      drawPixel(x, y, color);
+      remoteFlash(x, y, color);
+    });
 
     // ── Painting ────────────────────────────────────────────
     let painting     = false;
     let currentColor = '#000000';
-    const eraserColor = VOID;
 
     function canvasPos(e) {
       const rect   = canvas.getBoundingClientRect();
@@ -202,61 +219,21 @@
       };
     }
 
-    // Batch upserts
-    const queue = new Map();
-    let flushTimer = null;
-
-    function queuePaint(x, y, color) {
-      queue.set(`${x},${y}`, { x, y, color });
-      clearTimeout(flushTimer);
-      flushTimer = setTimeout(flush, 80);
-    }
-
-    async function flush() {
-      const rows = [...queue.values()];
-      queue.clear();
-      if (!rows.length) return;
-      await db.from('pixels').upsert(rows, { onConflict: 'x,y' });
-    }
-
     function paint(e) {
       const { x, y } = canvasPos(e);
       if (x < 0 || x >= GRID || y < 0 || y >= GRID) return;
       if (pixelData.get(`${x},${y}`) === currentColor) return;
       drawPixel(x, y, currentColor);
-      queuePaint(x, y, currentColor);
+      socket.emit('paint', { x, y, color: currentColor });
     }
 
     canvas.addEventListener('mousedown',  e => { painting = true; paint(e); });
     canvas.addEventListener('mousemove',  e => { if (painting) paint(e); });
-    window.addEventListener('mouseup',    () => { if (painting) { painting = false; flush(); } });
+    window.addEventListener('mouseup',    () => { painting = false; });
 
     canvas.addEventListener('touchstart', e => { painting = true; paint(e); e.preventDefault(); }, { passive: false });
     canvas.addEventListener('touchmove',  e => { if (painting) paint(e); e.preventDefault(); }, { passive: false });
-    window.addEventListener('touchend',   () => { if (painting) { painting = false; flush(); } });
-
-    // ── Real-time ────────────────────────────────────────────
-    function subscribe() {
-      db.channel('pixels')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'pixels' }, ({ new: p }) => {
-          if (!p || !p.x == null) return;
-          // Skip if we already have this exact state locally (echo of own paint)
-          if (pixelData.get(`${p.x},${p.y}`) === p.color) return;
-          drawPixel(p.x, p.y, p.color);
-
-          // Brief flash for remote paints
-          const rect   = canvas.getBoundingClientRect();
-          const scaleX = rect.width / canvas.width;
-          const el = Object.assign(document.createElement('div'), {
-            style: `position:fixed;width:${CELL*scaleX}px;height:${CELL*scaleX}px;
-                    left:${rect.left + p.x*CELL*scaleX}px;top:${rect.top + p.y*CELL*scaleX}px;
-                    background:${p.color};pointer-events:none;z-index:10;`
-          });
-          document.body.appendChild(el);
-          gsap.fromTo(el, { opacity: 0.7, scale: 1.5 }, { opacity: 0, scale: 1, duration: 0.35, ease: 'power2.out', onComplete: () => el.remove() });
-        })
-        .subscribe();
-    }
+    window.addEventListener('touchend',   () => { painting = false; });
 
     // ── Palette ──────────────────────────────────────────────
     const COLORS = [
@@ -266,7 +243,9 @@
       '#ff9999','#8B4513',
     ];
 
-    const paletteEl = document.getElementById('palette');
+    const paletteEl  = document.getElementById('palette');
+    const colorInput = document.getElementById('color-input');
+    const eraserBtn  = document.getElementById('eraser');
     paletteEl.style.cssText = 'display:flex;gap:5px;align-items:center;';
 
     function selectColor(color, swatchEl) {
@@ -274,36 +253,26 @@
       document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
       eraserBtn.classList.remove('active');
       if (swatchEl) swatchEl.classList.add('active');
-      colorInput.value = color;
+      colorInput.value = /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#000000';
     }
 
     COLORS.forEach(color => {
       const s = document.createElement('div');
       s.className = 'swatch';
       s.style.background = color;
-      s.title = color;
       if (color === '#000000') s.classList.add('active');
       s.addEventListener('click', () => selectColor(color, s));
       paletteEl.appendChild(s);
     });
 
-    const colorInput = document.getElementById('color-input');
-    colorInput.addEventListener('input', e => selectColor(e.target.value, null));
+    colorInput.addEventListener('input',  e => selectColor(e.target.value, null));
     colorInput.addEventListener('change', e => selectColor(e.target.value, null));
 
-    const eraserBtn = document.getElementById('eraser');
     eraserBtn.addEventListener('click', () => {
-      currentColor = eraserColor;
+      currentColor = VOID;
       document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
       eraserBtn.classList.add('active');
     });
-
-    // ── Boot ─────────────────────────────────────────────────
-    const loader = document.getElementById('loader');
-    await loadPixels();
-    subscribe();
-    gsap.to(loader, { opacity: 0, duration: 0.4, onComplete: () => loader.remove() });
-    gsap.from('#toolbar', { y: 52, duration: 0.5, ease: 'power3.out', delay: 0.1 });
   </script>
 </body>
 </html>
