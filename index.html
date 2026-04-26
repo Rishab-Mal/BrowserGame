@@ -3,44 +3,58 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>Pixelboard</title>
+  <title>Graffiti Wall</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      background: #111;
+      background: #1a0c08;
+      overflow: hidden;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
-      height: 100dvh;
-      overflow: hidden;
       user-select: none;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     }
 
-    #canvas-wrap {
+    #wall {
       flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
+      display: block;
+      width: 100%;
+      cursor: none;
     }
 
-    canvas {
-      display: block;
-      image-rendering: pixelated;
-      cursor: crosshair;
+    #spray-cursor {
+      position: fixed;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.55);
+      pointer-events: none;
+      z-index: 200;
+      opacity: 0;
+      top: 0; left: 0;
+    }
+
+    #spray-cursor::after {
+      content: '';
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.7);
     }
 
     /* ── Toolbar ── */
     #toolbar {
       flex-shrink: 0;
-      height: 52px;
-      background: #0d0d0d;
-      border-top: 1px solid #1f1f1f;
+      height: 62px;
+      background: #110808;
+      border-top: 3px solid #2a1208;
       display: flex;
       align-items: center;
-      gap: 6px;
-      padding: 0 12px;
+      gap: 7px;
+      padding: 0 14px;
       overflow-x: auto;
       overflow-y: hidden;
     }
@@ -48,92 +62,91 @@
     #toolbar::-webkit-scrollbar { display: none; }
 
     .swatch {
-      width: 26px;
-      height: 26px;
-      border-radius: 4px;
-      cursor: pointer;
-      flex-shrink: 0;
-      border: 2px solid transparent;
-      transition: transform 0.1s;
-    }
-
-    .swatch:hover { transform: scale(1.2); }
-    .swatch.active { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #333; }
-
-    #divider {
-      width: 1px;
+      width: 28px;
       height: 28px;
-      background: #1f1f1f;
-      flex-shrink: 0;
-      margin: 0 2px;
-    }
-
-    #color-input {
-      width: 26px;
-      height: 26px;
-      border: 2px solid #2a2a2a;
-      border-radius: 4px;
+      border-radius: 50%;
       cursor: pointer;
-      background: none;
-      padding: 0;
       flex-shrink: 0;
+      border: 3px solid #1a0c08;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.15);
     }
 
-    #eraser {
-      width: 26px;
-      height: 26px;
-      border-radius: 4px;
-      background: #1a1a1a;
-      border: 2px solid #2a2a2a;
-      color: #666;
-      font-size: 0.8rem;
+    .swatch.active {
+      border-color: #fff;
+      box-shadow: 0 0 0 2px #fff, 0 2px 8px rgba(0,0,0,0.7);
+    }
+
+    #sep {
+      width: 1px;
+      height: 30px;
+      background: #2a1208;
+      flex-shrink: 0;
+      margin: 0 3px;
+    }
+
+    .size-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #1a0c08;
+      border: 2px solid #3a1a0a;
+      color: #664428;
+      font-size: 0.68rem;
+      font-weight: 700;
       cursor: pointer;
       flex-shrink: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: border-color 0.1s;
+      letter-spacing: 0;
     }
 
-    #eraser:hover  { border-color: #555; color: #aaa; }
-    #eraser.active { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #333; }
+    .size-btn.active { border-color: #fff; color: #fff; }
 
-    #hint {
-      margin-left: auto;
-      font-size: 0.6rem;
-      color: #222;
-      white-space: nowrap;
+    #color-input {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 3px solid #1a0c08;
+      cursor: pointer;
+      padding: 0;
+      background: none;
       flex-shrink: 0;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
     }
 
+    /* ── Loader ── */
     #loader {
       position: fixed;
       inset: 0;
-      background: #111;
+      background: #1a0c08;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.72rem;
-      color: #333;
-      letter-spacing: 0.1em;
-      z-index: 100;
+      z-index: 300;
+      font-size: 0.7rem;
+      color: #4a2010;
+      letter-spacing: 0.2em;
     }
   </style>
 </head>
 <body>
 
-  <div id="loader">loading pixels...</div>
+  <div id="loader">loading wall...</div>
+  <div id="spray-cursor"></div>
 
-  <div id="canvas-wrap">
-    <canvas id="canvas"></canvas>
-  </div>
+  <canvas id="wall"></canvas>
 
   <div id="toolbar">
-    <div id="palette"></div>
-    <div id="divider"></div>
-    <input type="color" id="color-input" value="#000000" title="Custom color" />
-    <button id="eraser" title="Eraser">×</button>
-    <span id="hint">click or drag to paint</span>
+    <div id="palette" style="display:flex;gap:6px;align-items:center;flex-shrink:0;"></div>
+    <div id="sep"></div>
+    <div id="sizes" style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+      <button class="size-btn active" data-size="12">S</button>
+      <button class="size-btn"        data-size="24">M</button>
+      <button class="size-btn"        data-size="44">L</button>
+    </div>
+    <div id="sep"></div>
+    <input type="color" id="color-input" value="#ff2200" />
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -142,125 +155,218 @@
     const gsap   = window.gsap;
     const socket = io();
 
-    // ── Canvas setup ────────────────────────────────────────
-    const GRID    = 100;
-    const TOOLBAR = 52;
-    const CELL    = Math.max(4, Math.floor(Math.min(window.innerWidth, window.innerHeight - TOOLBAR) / GRID));
-
-    const canvas = document.getElementById('canvas');
+    // ── Canvas ───────────────────────────────────────────────
+    const canvas = document.getElementById('wall');
     const ctx    = canvas.getContext('2d');
-    canvas.width  = GRID * CELL;
-    canvas.height = GRID * CELL;
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight - 62;
 
-    const BG   = '#e8e8e8';
-    const VOID = '#ffffff';
-
-    // Draw grid background
-    ctx.fillStyle = BG;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = VOID;
-    for (let x = 0; x < GRID; x++)
-      for (let y = 0; y < GRID; y++)
-        ctx.fillRect(x*CELL+1, y*CELL+1, CELL-1, CELL-1);
-
-    // Local pixel state
-    const pixelData = new Map();
-
-    function drawPixel(x, y, color) {
-      pixelData.set(`${x},${y}`, color);
-      ctx.fillStyle = color;
-      ctx.fillRect(x*CELL+1, y*CELL+1, CELL-1, CELL-1);
-    }
-
-    // Flash effect for remote paints
-    function remoteFlash(x, y, color) {
-      const rect   = canvas.getBoundingClientRect();
-      const scaleX = rect.width / canvas.width;
-      const el     = document.createElement('div');
-      const sz     = CELL * scaleX;
-      el.style.cssText = `position:fixed;width:${sz}px;height:${sz}px;
-        left:${rect.left + x*CELL*scaleX}px;top:${rect.top + y*CELL*scaleX}px;
-        background:${color};pointer-events:none;z-index:10;`;
-      document.body.appendChild(el);
-      gsap.fromTo(el,
-        { opacity: 0.75, scale: 1.6 },
-        { opacity: 0, scale: 1, duration: 0.32, ease: 'power2.out', onComplete: () => el.remove() }
-      );
-    }
-
-    // ── Socket events ────────────────────────────────────────
-    const loader = document.getElementById('loader');
-
-    socket.on('init', pixels => {
-      pixels.forEach(({ x, y, color }) => drawPixel(x, y, color));
-      gsap.to(loader, { opacity: 0, duration: 0.4, onComplete: () => loader.remove() });
-      gsap.from('#toolbar', { y: 52, duration: 0.5, ease: 'power3.out', delay: 0.1 });
-    });
-
-    socket.on('paint', ({ x, y, color }) => {
-      if (pixelData.get(`${x},${y}`) === color) return;
-      drawPixel(x, y, color);
-      remoteFlash(x, y, color);
-    });
-
-    // ── Painting ────────────────────────────────────────────
-    let painting     = false;
-    let currentColor = '#000000';
-
-    function canvasPos(e) {
-      const rect   = canvas.getBoundingClientRect();
-      const scaleX = canvas.width  / rect.width;
-      const scaleY = canvas.height / rect.height;
-      const cx = e.touches ? e.touches[0].clientX : e.clientX;
-      const cy = e.touches ? e.touches[0].clientY : e.clientY;
-      return {
-        x: Math.floor((cx - rect.left) * scaleX / CELL),
-        y: Math.floor((cy - rect.top)  * scaleY / CELL),
+    // ── Brick wall background ────────────────────────────────
+    // roundRect polyfill
+    if (!CanvasRenderingContext2D.prototype.roundRect) {
+      CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+        r = Math.min(+r || 0, w / 2, h / 2);
+        this.beginPath();
+        this.moveTo(x + r, y);
+        this.lineTo(x + w - r, y);
+        this.arcTo(x + w, y,     x + w, y + r,     r);
+        this.lineTo(x + w, y + h - r);
+        this.arcTo(x + w, y + h, x + w - r, y + h, r);
+        this.lineTo(x + r, y + h);
+        this.arcTo(x,     y + h, x,     y + h - r, r);
+        this.lineTo(x,     y + r);
+        this.arcTo(x,     y,     x + r, y,          r);
+        this.closePath();
       };
     }
 
-    function paint(e) {
-      const { x, y } = canvasPos(e);
-      if (x < 0 || x >= GRID || y < 0 || y >= GRID) return;
-      if (pixelData.get(`${x},${y}`) === currentColor) return;
-      drawPixel(x, y, currentColor);
-      socket.emit('paint', { x, y, color: currentColor });
+    function drawBricks() {
+      const w = canvas.width, h = canvas.height;
+      const BW = 74, BH = 30, M = 7;
+
+      // Mortar
+      ctx.fillStyle = '#c8a87a';
+      ctx.fillRect(0, 0, w, h);
+
+      const BRICK = [
+        '#c04020','#ca4424','#b83818','#d04a28',
+        '#bc3c1e','#c84222','#b23516','#c63e20',
+      ];
+
+      const rows = Math.ceil(h / (BH + M)) + 1;
+
+      for (let r = 0; r <= rows; r++) {
+        const y      = r * (BH + M) - M * 0.5;
+        const offset = r % 2 === 0 ? 0 : (BW + M) * 0.5;
+        const cols   = Math.ceil(w / (BW + M)) + 2;
+
+        for (let c = -1; c <= cols; c++) {
+          const bx = c * (BW + M) - offset + M * 0.5;
+          const by = y + M * 0.5;
+          const ci = Math.abs(r * 7 + c * 13 + r ^ c) % BRICK.length;
+
+          // Body
+          ctx.fillStyle = BRICK[ci];
+          ctx.roundRect(bx, by, BW, BH, 4);
+          ctx.fill();
+
+          // Top highlight
+          ctx.fillStyle = 'rgba(255,210,160,0.2)';
+          ctx.roundRect(bx, by, BW, BH * 0.38, [4, 4, 0, 0]);
+          ctx.fill();
+
+          // Bottom shadow
+          ctx.fillStyle = 'rgba(0,0,0,0.25)';
+          ctx.roundRect(bx, by + BH * 0.66, BW, BH * 0.34, [0, 0, 4, 4]);
+          ctx.fill();
+
+          // Outline
+          ctx.strokeStyle = '#180806';
+          ctx.lineWidth   = 2.5;
+          ctx.roundRect(bx, by, BW, BH, 4);
+          ctx.stroke();
+        }
+      }
     }
 
-    canvas.addEventListener('mousedown',  e => { painting = true; paint(e); });
-    canvas.addEventListener('mousemove',  e => { if (painting) paint(e); });
-    window.addEventListener('mouseup',    () => { painting = false; });
+    drawBricks();
 
-    canvas.addEventListener('touchstart', e => { painting = true; paint(e); e.preventDefault(); }, { passive: false });
-    canvas.addEventListener('touchmove',  e => { if (painting) paint(e); e.preventDefault(); }, { passive: false });
-    window.addEventListener('touchend',   () => { painting = false; });
+    // ── Spray paint ──────────────────────────────────────────
+    // Seeded PRNG so every client draws identical spray from same event
+    function seededRand(seed) {
+      let s = seed | 0;
+      return () => {
+        s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+        return (s >>> 0) / 0xffffffff;
+      };
+    }
 
-    // ── Palette ──────────────────────────────────────────────
+    function spray(x, y, color, size, seed) {
+      const rand    = seededRand(seed);
+      const density = 32;
+      ctx.shadowColor = color;
+      ctx.shadowBlur  = 4;
+      for (let i = 0; i < density; i++) {
+        const r     = rand() * rand() * size;
+        const angle = rand() * Math.PI * 2;
+        const dotR  = rand() * 2.4 + 0.3;
+        ctx.globalAlpha = rand() * 0.6 + 0.2;
+        ctx.fillStyle   = color;
+        ctx.beginPath();
+        ctx.arc(x + Math.cos(angle) * r, y + Math.sin(angle) * r, dotR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.shadowBlur  = 0;
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Socket ───────────────────────────────────────────────
+    const loader = document.getElementById('loader');
+
+    socket.on('init', events => {
+      events.forEach(e => spray(e.x, e.y, e.color, e.size, e.seed));
+      gsap.to(loader, { opacity: 0, duration: 0.5, onComplete: () => loader.remove() });
+      gsap.from('#toolbar', { y: 62, duration: 0.55, ease: 'power3.out', delay: 0.15 });
+    });
+
+    socket.on('spray', e => spray(e.x, e.y, e.color, e.size, e.seed));
+
+    // ── Painting ─────────────────────────────────────────────
+    let painting     = false;
+    let currentColor = '#ff2200';
+    let currentSize  = 12;
+    let mousePos     = { x: 0, y: 0 };
+    let lastPos      = null;
+    let sprayTimer   = null;
+
+    function getPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const src  = e.touches ? e.touches[0] : e;
+      return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+    }
+
+    function doSpray(x, y) {
+      const seed = Math.random() * 0xffffff | 0;
+      spray(x, y, currentColor, currentSize, seed);
+      socket.emit('spray', { x, y, color: currentColor, size: currentSize, seed });
+    }
+
+    function startPainting(e) {
+      painting = true;
+      const p = getPos(e);
+      mousePos = p;
+      doSpray(p.x, p.y);
+      lastPos = { ...p };
+      clearInterval(sprayTimer);
+      sprayTimer = setInterval(() => doSpray(mousePos.x, mousePos.y), 40);
+    }
+
+    function movePainting(e) {
+      const p = getPos(e);
+      mousePos = p;
+      if (!painting) return;
+      const dx = p.x - (lastPos?.x ?? p.x);
+      const dy = p.y - (lastPos?.y ?? p.y);
+      if (dx*dx + dy*dy >= 9) { doSpray(p.x, p.y); lastPos = { ...p }; }
+    }
+
+    function stopPainting() {
+      painting = false;
+      clearInterval(sprayTimer);
+      lastPos = null;
+    }
+
+    canvas.addEventListener('mousedown',  startPainting);
+    canvas.addEventListener('mousemove',  movePainting);
+    window.addEventListener('mouseup',    stopPainting);
+    canvas.addEventListener('touchstart', e => { startPainting(e); e.preventDefault(); }, { passive: false });
+    canvas.addEventListener('touchmove',  e => { movePainting(e);  e.preventDefault(); }, { passive: false });
+    window.addEventListener('touchend',   stopPainting);
+
+    // ── Spray cursor ─────────────────────────────────────────
+    const cursorEl = document.getElementById('spray-cursor');
+    function setCursorStyle() {
+      gsap.set(cursorEl, {
+        width:       currentSize * 2,
+        height:      currentSize * 2,
+        borderColor: currentColor + '99',
+      });
+    }
+    setCursorStyle();
+
+    canvas.addEventListener('mousemove', e => {
+      gsap.set(cursorEl, { x: e.clientX, y: e.clientY, xPercent: -50, yPercent: -50 });
+    });
+    canvas.addEventListener('mouseenter', () => gsap.to(cursorEl, { opacity: 1, duration: 0.15 }));
+    canvas.addEventListener('mouseleave', () => gsap.to(cursorEl, { opacity: 0, duration: 0.15 }));
+    document.getElementById('toolbar').addEventListener('mouseenter', () => gsap.to(cursorEl, { opacity: 0, duration: 0.1 }));
+
+    // ── Palette ───────────────────────────────────────────────
     const COLORS = [
-      '#000000','#434343','#666666','#999999','#cccccc','#ffffff',
-      '#ff0000','#e65c00','#ffaa00','#ffff00','#00cc44','#007700',
-      '#00cccc','#0088ff','#0000ff','#6600cc','#cc00cc','#ff66cc',
-      '#ff9999','#8B4513',
+      '#ff2200','#ff7700','#ffee00','#44ff00','#00ffaa',
+      '#00ccff','#4400ff','#dd00ff','#ff0088','#ffffff',
+      '#aaaaaa','#000000','#ff99bb','#99ffee','#ffdd88',
     ];
 
     const paletteEl  = document.getElementById('palette');
     const colorInput = document.getElementById('color-input');
-    const eraserBtn  = document.getElementById('eraser');
-    paletteEl.style.cssText = 'display:flex;gap:5px;align-items:center;';
 
     function selectColor(color, swatchEl) {
       currentColor = color;
       document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
-      eraserBtn.classList.remove('active');
-      if (swatchEl) swatchEl.classList.add('active');
-      colorInput.value = /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#000000';
+      if (swatchEl) {
+        swatchEl.classList.add('active');
+        gsap.fromTo(swatchEl, { scale: 1.4 }, { scale: 1, duration: 0.4, ease: 'elastic.out(1,0.5)' });
+      }
+      colorInput.value = /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#ff2200';
+      setCursorStyle();
     }
 
     COLORS.forEach(color => {
       const s = document.createElement('div');
       s.className = 'swatch';
       s.style.background = color;
-      if (color === '#000000') s.classList.add('active');
+      if (color === '#ff2200') s.classList.add('active');
       s.addEventListener('click', () => selectColor(color, s));
       paletteEl.appendChild(s);
     });
@@ -268,10 +374,15 @@
     colorInput.addEventListener('input',  e => selectColor(e.target.value, null));
     colorInput.addEventListener('change', e => selectColor(e.target.value, null));
 
-    eraserBtn.addEventListener('click', () => {
-      currentColor = VOID;
-      document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
-      eraserBtn.classList.add('active');
+    // Size buttons
+    document.querySelectorAll('.size-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentSize = +btn.dataset.size;
+        gsap.fromTo(btn, { scale: 1.35 }, { scale: 1, duration: 0.35, ease: 'back.out(2)' });
+        setCursorStyle();
+      });
     });
   </script>
 </body>
