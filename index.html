@@ -2,503 +2,138 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Anon Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Pixelboard</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      background: #0d0d0d;
-      color: #e0e0e0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      height: 100dvh;
-      display: flex;
-      overflow: hidden;
-    }
-
-    /* ── Game area ── */
-    #game-area {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 3rem;
-      overflow: hidden;
-      padding: 2rem;
-    }
-
-    #snake-wrap {
+      background: #111;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 0.6rem;
+      height: 100dvh;
+      overflow: hidden;
+      user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     }
-
-    #score-display {
-      font-size: 0.72rem;
-      color: #444;
-      letter-spacing: 0.05em;
-    }
-
-    #score { display: inline-block; }
 
     #canvas-wrap {
-      position: relative;
-      line-height: 0;
-    }
-
-    #snake-canvas {
-      display: block;
-      border: 1px solid #1a1a1a;
-    }
-
-    #go-overlay {
-      position: absolute;
-      inset: 0;
+      flex: 1;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 0.6rem;
-      opacity: 0;
-      pointer-events: none;
-      cursor: pointer;
-    }
-
-    #go-score {
-      font-size: 0.9rem;
-      color: #555;
-      letter-spacing: 0.1em;
-      font-family: inherit;
-      min-height: 1.2em;
-    }
-
-    #go-hint {
-      font-size: 0.65rem;
-      color: #2a2a2a;
-      font-family: inherit;
-    }
-
-    #controls-hint {
-      font-size: 0.62rem;
-      color: #222;
-    }
-
-    /* ── Leaderboard ── */
-    #lb-wrap {
-      width: 180px;
-      flex-shrink: 0;
-    }
-
-    #lb-title {
-      font-size: 0.68rem;
-      color: #2a2a2a;
-      letter-spacing: 0.1em;
-      margin-bottom: 0.75rem;
-    }
-
-    .lb-row {
-      display: flex;
-      align-items: baseline;
-      gap: 0.5rem;
-      padding: 0.28rem 0;
-      border-bottom: 1px solid #111;
-    }
-
-    .lb-rank {
-      font-size: 0.62rem;
-      color: #252525;
-      width: 1rem;
-      text-align: right;
-      flex-shrink: 0;
-    }
-
-    .lb-name {
-      flex: 1;
-      font-size: 0.7rem;
       overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
     }
 
-    .lb-score {
-      font-size: 0.7rem;
-      color: #444;
-      flex-shrink: 0;
-    }
-
-    /* ── Eat flash particle ── */
-    .eat-flash {
-      position: fixed;
-      width: 10px;
-      height: 10px;
-      border-radius: 2px;
-      background: #4ade80;
-      pointer-events: none;
-      z-index: 100;
-    }
-
-    /* ── Chat panel ── */
-    #chat-panel {
-      width: 280px;
-      flex-shrink: 0;
-      border-left: 1px solid #1f1f1f;
-      display: flex;
-      flex-direction: column;
-      height: 100dvh;
-    }
-
-    #chat-header {
-      padding: 0.9rem 1rem;
-      border-bottom: 1px solid #1f1f1f;
-      display: flex;
-      align-items: center;
-    }
-
-    #chat-header h1 {
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: #fff;
-      letter-spacing: 0.02em;
-    }
-
-    #online {
-      margin-left: auto;
-      font-size: 0.7rem;
-      color: #444;
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-    }
-
-    #online::before {
-      content: '';
-      display: inline-block;
-      width: 5px;
-      height: 5px;
-      border-radius: 50%;
-      background: #4ade80;
-    }
-
-    #messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 0.75rem 1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.1rem;
-      scroll-behavior: smooth;
-    }
-
-    #messages::-webkit-scrollbar { width: 3px; }
-    #messages::-webkit-scrollbar-track { background: transparent; }
-    #messages::-webkit-scrollbar-thumb { background: #1f1f1f; border-radius: 2px; }
-
-    .msg {
-      display: flex;
-      gap: 0.5rem;
-      padding: 0.3rem 0;
-      align-items: flex-start;
-      animation: fadein 0.15s ease;
-    }
-
-    @keyframes fadein {
-      from { opacity: 0; transform: translateY(4px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    .msg .time {
-      font-size: 0.62rem;
-      color: #2a2a2a;
-      white-space: nowrap;
-      flex-shrink: 0;
-      padding-top: 0.15rem;
-    }
-
-    .msg .name {
-      font-size: 0.68rem;
-      font-weight: 500;
-      flex-shrink: 0;
-      white-space: nowrap;
-      padding-top: 0.15rem;
-    }
-
-    .msg .body {
-      display: flex;
-      flex-direction: column;
-      gap: 0.3rem;
-      min-width: 0;
-    }
-
-    .msg .text {
-      font-size: 0.82rem;
-      color: #c0c0c0;
-      line-height: 1.4;
-      word-break: break-word;
-    }
-
-    .msg.mine .text { color: #e8e8e8; }
-
-    .msg-img {
-      max-width: 180px;
-      max-height: 140px;
-      border-radius: 4px;
+    canvas {
       display: block;
-      cursor: pointer;
-      object-fit: cover;
+      image-rendering: pixelated;
+      cursor: crosshair;
     }
 
-    .msg-file {
-      font-size: 0.75rem;
-      color: #5b8db8;
-      text-decoration: none;
-    }
-
-    .msg-file:hover { text-decoration: underline; }
-
-    #bottom-bar {
-      padding: 0.6rem 1rem 0.75rem;
+    /* ── Toolbar ── */
+    #toolbar {
+      flex-shrink: 0;
+      height: 52px;
+      background: #0d0d0d;
       border-top: 1px solid #1f1f1f;
-    }
-
-    #file-preview {
       display: flex;
       align-items: center;
-      gap: 0.4rem;
-      padding-bottom: 0.4rem;
-      font-size: 0.7rem;
-      color: #555;
+      gap: 6px;
+      padding: 0 12px;
+      overflow-x: auto;
+      overflow-y: hidden;
     }
 
-    #file-preview-img {
-      width: 28px;
+    #toolbar::-webkit-scrollbar { display: none; }
+
+    .swatch {
+      width: 26px;
+      height: 26px;
+      border-radius: 4px;
+      cursor: pointer;
+      flex-shrink: 0;
+      border: 2px solid transparent;
+      transition: transform 0.1s;
+    }
+
+    .swatch:hover { transform: scale(1.2); }
+    .swatch.active { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #333; }
+
+    #divider {
+      width: 1px;
       height: 28px;
-      border-radius: 3px;
-      object-fit: cover;
-      display: none;
+      background: #1f1f1f;
+      flex-shrink: 0;
+      margin: 0 2px;
     }
 
-    #file-remove {
+    #color-input {
+      width: 26px;
+      height: 26px;
+      border: 2px solid #2a2a2a;
+      border-radius: 4px;
+      cursor: pointer;
       background: none;
-      border: none;
-      color: #444;
-      cursor: pointer;
-      font-size: 0.9rem;
       padding: 0;
-      margin-left: auto;
+      flex-shrink: 0;
     }
 
-    #file-remove:hover { color: #888; }
-
-    #form {
-      display: flex;
-      gap: 0.4rem;
-    }
-
-    #input {
-      flex: 1;
-      background: #151515;
-      border: 1px solid #222;
-      border-radius: 6px;
-      padding: 0.55rem 0.75rem;
-      color: #e0e0e0;
-      font-size: 0.82rem;
-      outline: none;
-      transition: border-color 0.15s;
-    }
-
-    #input:focus { border-color: #333; }
-    #input::placeholder { color: #2a2a2a; }
-
-    #attach {
-      background: #151515;
-      border: 1px solid #222;
-      border-radius: 6px;
-      color: #555;
-      padding: 0 0.65rem;
-      font-size: 0.9rem;
-      cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-      line-height: 1;
-    }
-
-    #attach:hover { background: #1f1f1f; color: #888; }
-
-    #send {
-      background: #151515;
-      border: 1px solid #222;
-      border-radius: 6px;
-      color: #888;
-      padding: 0 0.8rem;
+    #eraser {
+      width: 26px;
+      height: 26px;
+      border-radius: 4px;
+      background: #1a1a1a;
+      border: 2px solid #2a2a2a;
+      color: #666;
       font-size: 0.8rem;
       cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-      white-space: nowrap;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.1s;
     }
 
-    #send:hover { background: #1f1f1f; color: #ccc; }
-    #send:disabled { opacity: 0.35; cursor: default; }
+    #eraser:hover { border-color: #555; color: #aaa; }
+    #eraser.active { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #333; }
 
     #hint {
-      font-size: 0.62rem;
-      color: #1a1a1a;
-      text-align: center;
-      margin-top: 0.4rem;
+      margin-left: auto;
+      font-size: 0.6rem;
+      color: #222;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
-    .divider {
-      font-size: 0.68rem;
-      color: #1f1f1f;
-      text-align: center;
-      margin: 0.5rem 0;
-    }
-
-    #status {
-      font-size: 0.75rem;
+    #loader {
+      position: fixed;
+      inset: 0;
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
       color: #333;
-      text-align: center;
-      padding: 1.5rem;
-    }
-
-    /* ── Mobile ── */
-    #chat-backdrop { display: none; }
-    #chat-toggle   { display: none; }
-    #chat-close    { display: none; }
-    #chat-badge    { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #4ade80; vertical-align: middle; margin-left: 0.4rem; transform: scale(0); opacity: 0; }
-
-    @media (max-width: 768px) {
-      #game-area {
-        flex-direction: column;
-        gap: 1.25rem;
-        padding: 1rem;
-        justify-content: flex-start;
-        padding-top: 1.5rem;
-        overflow-y: auto;
-      }
-
-      #snake-canvas {
-        width: 300px;
-        height: 300px;
-        image-rendering: pixelated;
-      }
-
-      #lb-wrap {
-        width: 100%;
-        max-width: 300px;
-      }
-
-      #controls-hint { display: none; }
-
-      #chat-panel {
-        position: fixed;
-        top: 0; right: 0; bottom: 0;
-        width: min(320px, 100vw);
-        transform: translateX(100%);
-        transition: transform 0.22s ease;
-        z-index: 50;
-        border-left: none;
-        box-shadow: -6px 0 24px rgba(0,0,0,0.6);
-      }
-
-      #chat-panel.open { transform: translateX(0); }
-
-      #chat-backdrop {
-        display: block;
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,0.55);
-        z-index: 49;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.22s ease;
-      }
-
-      #chat-backdrop.visible { opacity: 1; pointer-events: auto; }
-
-      #chat-toggle {
-        display: flex;
-        align-items: center;
-        position: fixed;
-        bottom: 1.25rem;
-        right: 1.25rem;
-        z-index: 48;
-        background: #1a1a1a;
-        border: 1px solid #2a2a2a;
-        border-radius: 8px;
-        color: #888;
-        padding: 0.55rem 0.9rem;
-        font-size: 0.78rem;
-        font-family: inherit;
-        cursor: pointer;
-      }
-
-      #chat-close {
-        display: flex;
-        align-items: center;
-        background: none;
-        border: none;
-        color: #444;
-        font-size: 1.1rem;
-        cursor: pointer;
-        padding: 0;
-        margin-left: 0.5rem;
-        line-height: 1;
-      }
-
-      #chat-close:hover { color: #888; }
+      letter-spacing: 0.1em;
+      z-index: 100;
     }
   </style>
 </head>
 <body>
 
-  <!-- ── Snake + Leaderboard ── -->
-  <div id="game-area">
-    <div id="snake-wrap">
-      <div id="score-display">score: <span id="score">0</span></div>
-      <div id="canvas-wrap">
-        <canvas id="snake-canvas"></canvas>
-        <div id="go-overlay">
-          <span id="go-score"></span>
-          <span id="go-hint">tap · space to restart</span>
-        </div>
-      </div>
-      <div id="controls-hint">wasd · arrows · space to restart</div>
-    </div>
-    <div id="lb-wrap">
-      <div id="lb-title">leaderboard</div>
-      <div id="lb-rows"></div>
-    </div>
+  <div id="loader">loading pixels...</div>
+
+  <div id="canvas-wrap">
+    <canvas id="canvas"></canvas>
   </div>
 
-  <div id="chat-backdrop"></div>
-  <button id="chat-toggle">chat <span id="chat-badge"></span></button>
-
-  <!-- ── Chat ── -->
-  <div id="chat-panel">
-    <div id="chat-header">
-      <h1>chat</h1>
-      <div id="online">live</div>
-      <button id="chat-close">×</button>
-    </div>
-
-    <div id="messages">
-      <div id="status">connecting...</div>
-    </div>
-
-    <div id="bottom-bar">
-      <div id="file-preview" hidden>
-        <img id="file-preview-img" alt="" />
-        <span id="file-name-label"></span>
-        <button id="file-remove">×</button>
-      </div>
-      <form id="form">
-        <input id="input" type="text" placeholder="say something..." maxlength="500" autocomplete="off" />
-        <input id="file-input" type="file" hidden />
-        <button id="attach" type="button">⌂</button>
-        <button id="send" type="submit">send</button>
-      </form>
-      <div id="hint">random handle · no accounts</div>
-    </div>
+  <div id="toolbar">
+    <div id="palette"></div>
+    <div id="divider"></div>
+    <input type="color" id="color-input" value="#000000" title="Custom color" />
+    <button id="eraser" title="Eraser">×</button>
+    <span id="hint">click or drag to paint</span>
   </div>
 
   <script src="./gsap-public/minified/gsap.min.js"></script>
@@ -510,474 +145,165 @@
     const SUPABASE_KEY = 'sb_publishable_JnINm8V2SsPlmLky6YMWKA_1KuDunPu';
     const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // ── Shared helpers ──────────────────────────────────────
-    const ADJS  = ['swift','quiet','dark','cold','pale','dim','rough','bare','calm','lost','odd','thin','wild','stark','lean'];
-    const NOUNS = ['fox','crow','wolf','bear','hawk','ash','reed','moth','lynx','wren','pike','kite','fern','hare','rook'];
+    // ── Canvas setup ────────────────────────────────────────
+    const GRID    = 100;
+    const TOOLBAR = 52;
+    const CELL    = Math.max(4, Math.floor(Math.min(window.innerWidth, window.innerHeight - TOOLBAR) / GRID));
 
-    const USERNAME = localStorage.getItem('username') || (() => {
-      const a = ADJS[Math.floor(Math.random() * ADJS.length)];
-      const n = NOUNS[Math.floor(Math.random() * NOUNS.length)];
-      const d = Math.floor(Math.random() * 90) + 10;
-      const u = `${a}-${n}-${d}`;
-      localStorage.setItem('username', u);
-      return u;
-    })();
+    const canvas = document.getElementById('canvas');
+    const ctx    = canvas.getContext('2d');
+    canvas.width  = GRID * CELL;
+    canvas.height = GRID * CELL;
 
-    const NAME_COLORS = ['#5b8db8','#5fa870','#b85b5b','#b89a42','#7b5bb8','#42a898','#b85b98'];
-    function nameColor(name) {
-      let h = 0;
-      for (const c of name) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff;
-      return NAME_COLORS[Math.abs(h) % NAME_COLORS.length];
+    const BG   = '#e8e8e8'; // grid line color
+    const VOID = '#ffffff'; // unpainted pixel color
+
+    // Fill background (grid lines)
+    ctx.fillStyle = BG;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Fill all pixels white
+    ctx.fillStyle = VOID;
+    for (let x = 0; x < GRID; x++) {
+      for (let y = 0; y < GRID; y++) {
+        ctx.fillRect(x*CELL+1, y*CELL+1, CELL-1, CELL-1);
+      }
     }
 
-    function escHtml(s) {
-      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    // Local pixel state
+    const pixelData = new Map(); // 'x,y' → color
+
+    function drawPixel(x, y, color) {
+      pixelData.set(`${x},${y}`, color);
+      ctx.fillStyle = color;
+      ctx.fillRect(x*CELL+1, y*CELL+1, CELL-1, CELL-1);
     }
 
-    // ── Snake ───────────────────────────────────────────────
-    const GRID = 20, CELL = 20;
-    const canvas    = document.getElementById('snake-canvas');
-    const ctx       = canvas.getContext('2d');
-    const scoreEl   = document.getElementById('score');
-    const goOverlay = document.getElementById('go-overlay');
-    const goScore   = document.getElementById('go-score');
-    const goHint    = document.getElementById('go-hint');
-    canvas.width    = GRID * CELL;
-    canvas.height   = GRID * CELL;
-
-    // Food pulse — driven by GSAP, read in drawGame()
-    const foodPulse = { s: 1 };
-    function animFoodSpawn() {
-      gsap.killTweensOf(foodPulse);
-      foodPulse.s = 0;
-      gsap.to(foodPulse, {
-        s: 1, duration: 0.22, ease: 'back.out(2)',
-        onComplete: () => gsap.to(foodPulse, { s: 1.28, duration: 0.62, repeat: -1, yoyo: true, ease: 'sine.inOut' })
-      });
-    }
-    animFoodSpawn();
-
-    let snake, dir, nextDir, food, score, alive, raf, lastTick;
-
-    function initGame() {
-      snake    = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
-      dir      = {x:1,y:0};
-      nextDir  = {x:1,y:0};
-      food     = spawnFood();
-      animFoodSpawn();
-      score    = 0;
-      alive    = true;
-      lastTick = 0;
-      scoreEl.textContent = '0';
-      gsap.set(goOverlay, { opacity: 0, pointerEvents: 'none' });
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(gameFrame);
+    // ── Load from DB ────────────────────────────────────────
+    async function loadPixels() {
+      const { data } = await db.from('pixels').select('x, y, color');
+      (data || []).forEach(({ x, y, color }) => drawPixel(x, y, color));
     }
 
-    function spawnFood() {
-      let p;
-      do { p = {x:Math.floor(Math.random()*GRID), y:Math.floor(Math.random()*GRID)}; }
-      while (snake.some(s => s.x===p.x && s.y===p.y));
-      return p;
-    }
+    // ── Painting ────────────────────────────────────────────
+    let painting     = false;
+    let currentColor = '#000000';
+    const eraserColor = VOID;
 
-    function gameFrame(ts) {
-      if (!alive) return;
-      raf = requestAnimationFrame(gameFrame);
-      const ms = Math.max(70, 140 - Math.floor(score/5)*8);
-      if (ts - lastTick < ms) return;
-      lastTick = ts;
-      tick();
-    }
-
-    const MILESTONE_COLORS = ['#4ade80', '#fbbf24', '#60a5fa'];
-
-    function eatFlash(milestone = false) {
+    function canvasPos(e) {
       const rect   = canvas.getBoundingClientRect();
-      const scaleX = rect.width  / canvas.width;
-      const scaleY = rect.height / canvas.height;
-      const cx = rect.left + (food.x + 0.5) * CELL * scaleX;
-      const cy = rect.top  + (food.y + 0.5) * CELL * scaleY;
-      const count = milestone ? 16 : 6;
-
-      for (let i = 0; i < count; i++) {
-        const el = document.createElement('div');
-        el.className = 'eat-flash';
-        if (milestone) el.style.background = MILESTONE_COLORS[i % 3];
-        document.body.appendChild(el);
-        const angle = (i / count) * Math.PI * 2 + (milestone ? 0 : Math.random() * 0.8);
-        const dist  = milestone ? 28 + Math.random() * 44 : 18 + Math.random() * 14;
-        gsap.fromTo(el,
-          { x: cx - 5, y: cy - 5, scale: milestone ? 1.6 : 1, opacity: 0.9 },
-          {
-            x: cx - 5 + Math.cos(angle) * dist,
-            y: cy - 5 + Math.sin(angle) * dist,
-            scale: 0, opacity: 0,
-            duration: (milestone ? 0.55 : 0.38) + Math.random() * 0.15,
-            ease: 'power2.out',
-            onComplete: () => el.remove()
-          }
-        );
-      }
+      const scaleX = canvas.width  / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const cx = e.touches ? e.touches[0].clientX : e.clientX;
+      const cy = e.touches ? e.touches[0].clientY : e.clientY;
+      return {
+        x: Math.floor((cx - rect.left) * scaleX / CELL),
+        y: Math.floor((cy - rect.top)  * scaleY / CELL),
+      };
     }
 
-    function deathExplosion() {
-      const rect   = canvas.getBoundingClientRect();
-      const scaleX = rect.width  / canvas.width;
-      const scaleY = rect.height / canvas.height;
+    // Batch upserts
+    const queue = new Map();
+    let flushTimer = null;
 
-      snake.forEach((s, i) => {
-        const el = document.createElement('div');
-        el.className = 'eat-flash';
-        el.style.background = i === 0 ? '#d0d0d0' : `hsl(0,0%,${Math.max(18, 40-i)}%)`;
-        document.body.appendChild(el);
-        const cx    = rect.left + (s.x + 0.5) * CELL * scaleX;
-        const cy    = rect.top  + (s.y + 0.5) * CELL * scaleY;
-        const angle = Math.random() * Math.PI * 2;
-        const dist  = 20 + Math.random() * 60;
-        gsap.fromTo(el,
-          { x: cx - 5, y: cy - 5, scale: 1, opacity: 0.85 },
-          { x: cx - 5 + Math.cos(angle) * dist, y: cy - 5 + Math.sin(angle) * dist,
-            scale: 0, opacity: 0,
-            duration: 0.45 + Math.random() * 0.35,
-            ease: 'power3.out',
-            delay: i * 0.01,
-            onComplete: () => el.remove() }
-        );
-      });
-
-      // Red border flash
-      const wrap = document.getElementById('canvas-wrap');
-      gsap.fromTo(wrap,
-        { boxShadow: '0 0 0 2px #ef4444' },
-        { boxShadow: '0 0 0 0px rgba(239,68,68,0)', duration: 0.9, ease: 'power2.out' }
-      );
+    function queuePaint(x, y, color) {
+      queue.set(`${x},${y}`, { x, y, color });
+      clearTimeout(flushTimer);
+      flushTimer = setTimeout(flush, 80);
     }
 
-    function tick() {
-      dir = nextDir;
-      const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
-      if (head.x < 0 || head.x >= GRID || head.y < 0 || head.y >= GRID ||
-          snake.some(s => s.x===head.x && s.y===head.y)) {
-        endGame();
-        return;
-      }
-      snake.unshift(head);
-      if (head.x === food.x && head.y === food.y) {
-        const milestone = (score + 1) % 5 === 0;
-        eatFlash(milestone);
-        score++;
-        scoreEl.textContent = score;
-        gsap.fromTo(scoreEl,
-          { scale: milestone ? 2.4 : 1.8, color: milestone ? '#fbbf24' : '#4ade80' },
-          { scale: 1, color: '#444', duration: milestone ? 0.6 : 0.45, ease: milestone ? 'elastic.out(1,0.4)' : 'back.out(3)', overwrite: true }
-        );
-        food = spawnFood();
-        animFoodSpawn();
-      } else {
-        snake.pop();
-      }
-      drawGame();
+    async function flush() {
+      const rows = [...queue.values()];
+      queue.clear();
+      if (!rows.length) return;
+      await db.from('pixels').upsert(rows, { onConflict: 'x,y' });
     }
 
-    function drawGame() {
-      ctx.fillStyle = '#0d0d0d';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      const hs = ((CELL - 6) * foodPulse.s) / 2;
-      ctx.fillStyle = '#4ade80';
-      ctx.fillRect(food.x*CELL + CELL/2 - hs, food.y*CELL + CELL/2 - hs, hs*2, hs*2);
-
-      snake.forEach((s, i) => {
-        ctx.fillStyle = i === 0 ? '#d0d0d0' : `hsl(0,0%,${Math.max(18, 40-i)}%)`;
-        ctx.fillRect(s.x*CELL+1, s.y*CELL+1, CELL-2, CELL-2);
-      });
+    function paint(e) {
+      const { x, y } = canvasPos(e);
+      if (x < 0 || x >= GRID || y < 0 || y >= GRID) return;
+      if (pixelData.get(`${x},${y}`) === currentColor) return;
+      drawPixel(x, y, currentColor);
+      queuePaint(x, y, currentColor);
     }
 
-    async function endGame() {
-      alive = false;
-      cancelAnimationFrame(raf);
-      gsap.killTweensOf(foodPulse);
-      deathExplosion();
+    canvas.addEventListener('mousedown',  e => { painting = true; paint(e); });
+    canvas.addEventListener('mousemove',  e => { if (painting) paint(e); });
+    window.addEventListener('mouseup',    () => { if (painting) { painting = false; flush(); } });
 
-      ctx.fillStyle = 'rgba(13,13,13,0.72)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    canvas.addEventListener('touchstart', e => { painting = true; paint(e); e.preventDefault(); }, { passive: false });
+    canvas.addEventListener('touchmove',  e => { if (painting) paint(e); e.preventDefault(); }, { passive: false });
+    window.addEventListener('touchend',   () => { if (painting) { painting = false; flush(); } });
 
-      goScore.textContent = '';
-      gsap.set(goHint, { opacity: 0 });
-      gsap.set(goOverlay, { opacity: 1, pointerEvents: 'auto' });
-
-      const counter = { val: 0 };
-      gsap.to(counter, {
-        val: score, duration: 0.8, ease: 'power2.out',
-        onUpdate: () => { goScore.textContent = `score  ${Math.round(counter.val)}`; }
-      });
-      gsap.to(goHint, { opacity: 1, delay: 0.75, duration: 0.4 });
-
-      if (score > 0) {
-        await db.from('scores').insert({ username: USERNAME, score });
-        loadLeaderboard();
-      }
-    }
-
-    goOverlay.addEventListener('click', () => { if (!alive) initGame(); });
-
-    // Touch swipe controls for snake
-    let touchX = 0, touchY = 0;
-    canvas.addEventListener('touchstart', e => {
-      touchX = e.touches[0].clientX;
-      touchY = e.touches[0].clientY;
-      e.preventDefault();
-    }, { passive: false });
-    canvas.addEventListener('touchend', e => {
-      const dx = e.changedTouches[0].clientX - touchX;
-      const dy = e.changedTouches[0].clientY - touchY;
-      if (!alive) { initGame(); return; }
-      if (Math.abs(dx) > Math.abs(dy)) {
-        if (dx >  20 && dir.x !== -1) nextDir = {x: 1, y: 0};
-        if (dx < -20 && dir.x !==  1) nextDir = {x:-1, y: 0};
-      } else {
-        if (dy >  20 && dir.y !== -1) nextDir = {x: 0, y: 1};
-        if (dy < -20 && dir.y !==  1) nextDir = {x: 0, y:-1};
-      }
-    }, { passive: true });
-
-    document.addEventListener('keydown', e => {
-      if (document.activeElement === input) return;
-      switch (e.key) {
-        case 'ArrowUp':    case 'w': case 'W': if (dir.y !==  1) nextDir={x:0,y:-1}; e.preventDefault(); break;
-        case 'ArrowDown':  case 's': case 'S': if (dir.y !== -1) nextDir={x:0,y: 1}; e.preventDefault(); break;
-        case 'ArrowLeft':  case 'a': case 'A': if (dir.x !==  1) nextDir={x:-1,y:0}; e.preventDefault(); break;
-        case 'ArrowRight': case 'd': case 'D': if (dir.x !== -1) nextDir={x: 1,y:0}; e.preventDefault(); break;
-        case ' ': if (!alive) initGame(); e.preventDefault(); break;
-      }
-    });
-
-    // ── Leaderboard ─────────────────────────────────────────
-    const lbRowsEl = document.getElementById('lb-rows');
-
-    async function loadLeaderboard() {
-      const { data } = await db
-        .from('scores')
-        .select('username, score')
-        .order('score', { ascending: false })
-        .limit(500);
-
-      const seen = new Set();
-      const top10 = [];
-      for (const row of (data || [])) {
-        const name = row.username || 'anon';
-        if (!seen.has(name)) { seen.add(name); top10.push({ name, score: row.score }); }
-        if (top10.length === 10) break;
-      }
-
-      lbRowsEl.innerHTML = '';
-      top10.forEach(({ name, score }, i) => {
-        const color = nameColor(name);
-        const div   = document.createElement('div');
-        div.className = 'lb-row';
-        if (name === USERNAME) div.dataset.me = '1';
-        div.innerHTML = `<span class="lb-rank">${i+1}</span><span class="lb-name" style="color:${color}">${escHtml(name)}</span><span class="lb-score">${score}</span>`;
-        lbRowsEl.appendChild(div);
-      });
-
-      gsap.from('.lb-row', {
-        x: -14, opacity: 0, stagger: 0.055, duration: 0.28, ease: 'power2.out',
-        onComplete: () => {
-          const myRow = lbRowsEl.querySelector('[data-me="1"]');
-          if (myRow) gsap.fromTo(myRow,
-            { backgroundColor: 'rgba(74,222,128,0.18)' },
-            { backgroundColor: 'rgba(74,222,128,0)', duration: 1.4, ease: 'power2.out' }
-          );
-        }
-      });
-    }
-
-    // ── Chat toggle (mobile) ────────────────────────────────
-    const chatPanel    = document.getElementById('chat-panel');
-    const chatBackdrop = document.getElementById('chat-backdrop');
-    const chatToggle   = document.getElementById('chat-toggle');
-    const chatClose    = document.getElementById('chat-close');
-    const chatBadge    = document.getElementById('chat-badge');
-
-    function openChat() {
-      chatPanel.classList.add('open');
-      chatBackdrop.classList.add('visible');
-      gsap.to(chatBadge, { scale: 0, opacity: 0, duration: 0.2 });
-    }
-    function closeChat() {
-      chatPanel.classList.remove('open');
-      chatBackdrop.classList.remove('visible');
-    }
-
-    chatToggle.addEventListener('click', openChat);
-    chatBackdrop.addEventListener('click', closeChat);
-    chatClose.addEventListener('click', closeChat);
-
-    // ── Chat ────────────────────────────────────────────────
-    const messagesEl     = document.getElementById('messages');
-    const statusEl       = document.getElementById('status');
-    const form           = document.getElementById('form');
-    const input          = document.getElementById('input');
-    const fileInput      = document.getElementById('file-input');
-    const attachBtn      = document.getElementById('attach');
-    const sendBtn        = document.getElementById('send');
-    const filePreview    = document.getElementById('file-preview');
-    const filePreviewImg = document.getElementById('file-preview-img');
-    const fileNameLabel  = document.getElementById('file-name-label');
-    const fileRemove     = document.getElementById('file-remove');
-
-    const mine = new Set();
-    let selectedFile = null;
-
-    function isImageUrl(url) {
-      return /\.(jpg|jpeg|png|gif|webp|avif|svg)(\?|$)/i.test(url);
-    }
-
-    function fmt(ts) {
-      const d = new Date(ts);
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-
-    function renderMsg(msg, isOwn = false) {
-      const el      = document.createElement('div');
-      el.className  = 'msg' + (isOwn ? ' mine' : '');
-      el.dataset.id = msg.id;
-      const name    = msg.username || 'anon';
-      const color   = nameColor(name);
-
-      let bodyInner = '';
-      if (msg.content)  bodyInner += `<span class="text">${escHtml(msg.content)}</span>`;
-      if (msg.file_url) {
-        if (isImageUrl(msg.file_url)) {
-          bodyInner += `<img class="msg-img" src="${escHtml(msg.file_url)}" loading="lazy" onclick="window.open(this.src,'_blank')" />`;
-        } else {
-          bodyInner += `<a class="msg-file" href="${escHtml(msg.file_url)}" target="_blank">↓ ${escHtml(msg.file_name||'file')}</a>`;
-        }
-      }
-
-      el.innerHTML = `<span class="time">${fmt(msg.created_at)}</span><span class="name" style="color:${color}">${escHtml(name)}</span><div class="body">${bodyInner}</div>`;
-      return el;
-    }
-
-    function scrollBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
-    function atBottom() { return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 80; }
-
-    attachBtn.addEventListener('click', () => fileInput.click());
-
-    fileInput.addEventListener('change', () => {
-      const file = fileInput.files[0];
-      if (!file) return;
-      selectedFile = file;
-      fileNameLabel.textContent = file.name;
-      filePreview.hidden = false;
-      if (file.type.startsWith('image/')) {
-        filePreviewImg.style.display = 'block';
-        filePreviewImg.src = URL.createObjectURL(file);
-      } else {
-        filePreviewImg.style.display = 'none';
-      }
-    });
-
-    function clearFile() {
-      selectedFile = null;
-      fileInput.value = '';
-      filePreview.hidden = true;
-      filePreviewImg.style.display = 'none';
-      filePreviewImg.src = '';
-      fileNameLabel.textContent = '';
-    }
-
-    fileRemove.addEventListener('click', clearFile);
-
-    async function loadMessages() {
-      const { data, error } = await db.from('messages').select('*').order('created_at',{ascending:true}).limit(100);
-      statusEl.remove();
-      if (error) {
-        const err = document.createElement('div');
-        err.className = 'divider';
-        err.textContent = 'could not load messages';
-        messagesEl.appendChild(err);
-        return;
-      }
-      if (!data.length) {
-        const empty = document.createElement('div');
-        empty.className = 'divider';
-        empty.textContent = 'no messages yet';
-        messagesEl.appendChild(empty);
-      } else {
-        data.forEach(m => messagesEl.appendChild(renderMsg(m)));
-      }
-      scrollBottom();
-    }
-
+    // ── Real-time ────────────────────────────────────────────
     function subscribe() {
-      db.channel('messages')
-        .on('postgres_changes', {event:'INSERT', schema:'public', table:'messages'}, payload => {
-          const msg = payload.new;
-          if (document.querySelector(`[data-id="${msg.id}"]`)) return;
-          const wasAtBottom = atBottom();
-          messagesEl.appendChild(renderMsg(msg, mine.has(msg.id)));
-          if (wasAtBottom) scrollBottom();
+      db.channel('pixels')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'pixels' }, ({ new: p }) => {
+          if (!p || !p.x == null) return;
+          // Skip if we already have this exact state locally (echo of own paint)
+          if (pixelData.get(`${p.x},${p.y}`) === p.color) return;
+          drawPixel(p.x, p.y, p.color);
 
-          // Badge on mobile when chat is closed
-          if (!chatPanel.classList.contains('open')) {
-            gsap.fromTo(chatBadge,
-              { scale: 0, opacity: 1 },
-              { scale: 1, opacity: 1, duration: 0.4, ease: 'back.out(3)' }
-            );
-          }
+          // Brief flash for remote paints
+          const rect   = canvas.getBoundingClientRect();
+          const scaleX = rect.width / canvas.width;
+          const el = Object.assign(document.createElement('div'), {
+            style: `position:fixed;width:${CELL*scaleX}px;height:${CELL*scaleX}px;
+                    left:${rect.left + p.x*CELL*scaleX}px;top:${rect.top + p.y*CELL*scaleX}px;
+                    background:${p.color};pointer-events:none;z-index:10;`
+          });
+          document.body.appendChild(el);
+          gsap.fromTo(el, { opacity: 0.7, scale: 1.5 }, { opacity: 0, scale: 1, duration: 0.35, ease: 'power2.out', onComplete: () => el.remove() });
         })
         .subscribe();
     }
 
-    async function uploadFile(file) {
-      const ext  = file.name.includes('.') ? file.name.split('.').pop() : 'bin';
-      const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error } = await db.storage.from('chat-files').upload(path, file);
-      if (error) throw error;
-      const { data:{publicUrl} } = db.storage.from('chat-files').getPublicUrl(path);
-      return publicUrl;
+    // ── Palette ──────────────────────────────────────────────
+    const COLORS = [
+      '#000000','#434343','#666666','#999999','#cccccc','#ffffff',
+      '#ff0000','#e65c00','#ffaa00','#ffff00','#00cc44','#007700',
+      '#00cccc','#0088ff','#0000ff','#6600cc','#cc00cc','#ff66cc',
+      '#ff9999','#8B4513',
+    ];
+
+    const paletteEl = document.getElementById('palette');
+    paletteEl.style.cssText = 'display:flex;gap:5px;align-items:center;';
+
+    function selectColor(color, swatchEl) {
+      currentColor = color;
+      document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+      eraserBtn.classList.remove('active');
+      if (swatchEl) swatchEl.classList.add('active');
+      colorInput.value = color;
     }
 
-    form.addEventListener('submit', async e => {
-      e.preventDefault();
-      const content = input.value.trim();
-      if (!content && !selectedFile) return;
-      input.value = '';
-      sendBtn.disabled = true;
-      sendBtn.textContent = '...';
-
-      let file_url = null, file_name = null;
-      if (selectedFile) {
-        try {
-          file_url  = await uploadFile(selectedFile);
-          file_name = selectedFile.name;
-        } catch {
-          sendBtn.disabled = false;
-          sendBtn.textContent = 'send';
-          return;
-        }
-        clearFile();
-      }
-
-      const { data, error } = await db.from('messages')
-        .insert({ content, username: USERNAME, file_url, file_name })
-        .select().single();
-
-      sendBtn.disabled = false;
-      sendBtn.textContent = 'send';
-
-      if (!error && data) {
-        mine.add(data.id);
-        const existing = document.querySelector(`[data-id="${data.id}"]`);
-        if (existing) existing.classList.add('mine');
-      }
+    COLORS.forEach(color => {
+      const s = document.createElement('div');
+      s.className = 'swatch';
+      s.style.background = color;
+      s.title = color;
+      if (color === '#000000') s.classList.add('active');
+      s.addEventListener('click', () => selectColor(color, s));
+      paletteEl.appendChild(s);
     });
 
-    initGame();
-    await Promise.all([loadMessages(), loadLeaderboard()]);
+    const colorInput = document.getElementById('color-input');
+    colorInput.addEventListener('input', e => selectColor(e.target.value, null));
+    colorInput.addEventListener('change', e => selectColor(e.target.value, null));
+
+    const eraserBtn = document.getElementById('eraser');
+    eraserBtn.addEventListener('click', () => {
+      currentColor = eraserColor;
+      document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+      eraserBtn.classList.add('active');
+    });
+
+    // ── Boot ─────────────────────────────────────────────────
+    const loader = document.getElementById('loader');
+    await loadPixels();
     subscribe();
+    gsap.to(loader, { opacity: 0, duration: 0.4, onComplete: () => loader.remove() });
+    gsap.from('#toolbar', { y: 52, duration: 0.5, ease: 'power3.out', delay: 0.1 });
   </script>
 </body>
 </html>
